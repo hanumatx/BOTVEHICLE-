@@ -12,7 +12,7 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN", "8926183222:AAERWMctyo_cyyTQ9Q-6d4ZcTrqV
 bot = telebot.TeleBot(BOT_TOKEN)
 
 # ========== Admin Configuration ==========
-ADMIN_ID = 6618532656          # Admin Telegram ID
+ADMIN_ID = 8273728944         # Admin Telegram ID
 ADMIN_USERNAME = "MRXIXZ"      # Admin username
 
 # ========== JSON Database System ==========

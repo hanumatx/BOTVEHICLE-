@@ -12,7 +12,7 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN", "8926183222:AAERWMctyo_cyyTQ9Q-6d4ZcTrqV
 bot = telebot.TeleBot(BOT_TOKEN)
 
 # ========== Admin Configuration ==========
-ADMIN_ID = 8273728944         # Admin Telegram ID
+ADMIN_ID = 6618532656          # Admin Telegram ID 
 ADMIN_USERNAME = "MRXIXZ"      # Admin username
 
 # ========== JSON Database System ==========
@@ -37,6 +37,7 @@ def register_user(user_id):
     data = load_data()
     uid = str(user_id)
     if uid not in data:
+        # Default user structure: credits aur total usage track karenge
         data[uid] = {"credits": 0, "usage": 0}
         if user_id != ADMIN_ID:
             data[uid]["credits"] = 1  # 1 Free Credit for new users
@@ -178,14 +179,6 @@ def fetch_address_api(reg_no):
 def fetch_mobile_number_requests(vehicle_number, chassis_last_5):
     try:
         session = requests.Session()
-        
-        # 👇 Proxy setup for cloud hosting (Railway/Heroku) 👇
-        proxies = {
-            "http": "http://45.89.106.12:8080",
-            "https": "http://45.89.106.12:8080"
-        }
-        session.proxies.update(proxies)
-        
         base_headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
@@ -201,7 +194,6 @@ def fetch_mobile_number_requests(vehicle_number, chassis_last_5):
             'Origin': 'https://vahan.parivahan.gov.in',
             'Accept-Language': 'en-GB,en;q=0.9',
         }
-        
         r1 = session.get(HOMEPAGE_URL, headers=base_headers, timeout=30)
         viewstate = extract_viewstate(r1.text)
         checkbox_id = find_checkbox_id(r1.text)
@@ -264,16 +256,9 @@ def fetch_mobile_number_requests(vehicle_number, chassis_last_5):
         fallback = re.findall(r'\b([6-9]\d{9})\b', text)
         if fallback:
             return {"success": True, "mobile_number": fallback[0]}
-        
         return {"success": False, "error": "Mobile number not found"}
-
-    except requests.exceptions.ProxyError:
-        return {"success": False, "error": "Proxy dead ya block ho gayi hai."}
-    except requests.exceptions.Timeout:
-        return {"success": False, "error": "Proxy bohot slow hai, timeout ho gaya."}
     except Exception as e:
         return {"success": False, "error": f"Requests failure: {e}"}
-
 
 # ========== Telegram Bot Handlers ==========
 @bot.message_handler(commands=['start'])
@@ -281,11 +266,11 @@ def send_welcome(message):
     user_id = message.chat.id
     is_new = register_user(user_id)
     if user_id == ADMIN_ID:
-        welcome = f"👋 Welcome Admin @{ADMIN_USERNAME}!\nYou have unlimited credits.\nUse /broadcast to send messages.\nUse /addcredit <user_id> <credits> to add credits.\nUse /getdb to download user database."
+        welcome = f"👋 Welcome Admin @{ADMIN_USERNAME}!\nYou have unlimited credits.\nUse /broadcast to send messages.\nUse /addcredit <user_id> <credits> to add credits to users."
     else:
         credits = get_user_credits(user_id)
         if is_new:
-            welcome = f"👋 Welcome! You have received 1 FREE credit.\n💰 Your balance: {credits} credit (1 search = 1 credit)\n\nSend any vehicle number to get details.\nTo buy more credits, contact @{ADMIN_USERNAME}"
+            welcome = f"👋 Welcome! You have received 1 FREE credit.\n💰 Your balance: {credits} credit (1 search = 1 credit)\n\nSend any vehicle number to get details.\nTo buy more credits, contact @{ADMIN_USERNAME} (1 credit = ₹4)"
         else:
             welcome = f"👋 Welcome back!\n💰 Your balance: {credits} credits (1 search = 1 credit)\n\nSend vehicle number or /balance\nTo buy more credits, contact @{ADMIN_USERNAME}"
     bot.reply_to(message, welcome)
@@ -298,22 +283,6 @@ def show_balance(message):
         return
     credits = get_user_credits(user_id)
     bot.reply_to(message, f"💰 *Your credit balance:* {credits}\n\n1 search = 1 credit\nNeed more? Contact @{ADMIN_USERNAME}", parse_mode="Markdown")
-
-@bot.message_handler(commands=['getdb'])
-def send_database(message):
-    """Admin command to download the JSON database from Railway."""
-    if message.chat.id != ADMIN_ID:
-        bot.reply_to(message, "⛔ Only admin can use this command.")
-        return
-    
-    try:
-        if os.path.exists(DATA_FILE):
-            with open(DATA_FILE, "rb") as f:
-                bot.send_document(ADMIN_ID, f, caption="📂 Ye raha aapka current database backup.")
-        else:
-            bot.reply_to(message, "⚠️ Database file abhi tak bani nahi hai (koi user register nahi hua).")
-    except Exception as e:
-        bot.reply_to(message, f"❌ Error retrieving database: {e}")
 
 @bot.message_handler(commands=['addcredit'])
 def add_credit_command(message):
@@ -408,18 +377,11 @@ def process_vehicle(message):
             bot.send_message(ADMIN_ID, f"🔔 <b>Search Alert</b>\n👤 User ID: <code>{user_id}</code>\n🚗 Searched: <code>{reg_no}</code>\n📱 Status: Mobile Found ✅\n💰 User Balance: {current_balance}", parse_mode="HTML")
         except: pass
     else:
-        # Credit safe (Proxy error ya block hone par yaha aayega)
+        # Credit safe
         current_balance = "Unlimited (Admin)" if user_id == ADMIN_ID else get_user_credits(user_id)
-        
-        # Checking if proxy failed specifically
-        err_msg = mobile_res.get("error", "Mobile not found")
-        if "Proxy" in err_msg or "Timeout" in err_msg:
-            credit_footer = f"🎁 <b>0 Credits deducted. ({err_msg})</b>\n💰 <b>Remaining balance:</b> {current_balance}"
-        else:
-            credit_footer = f"🎁 <b>0 Credits deducted. (Mobile not found)</b>\n💰 <b>Remaining balance:</b> {current_balance}"
-            
+        credit_footer = f"🎁 <b>0 Credits deducted. (Mobile not found)</b>\n💰 <b>Remaining balance:</b> {current_balance}"
         try:
-            bot.send_message(ADMIN_ID, f"🔔 <b>Search Alert</b>\n👤 User ID: <code>{user_id}</code>\n🚗 Searched: <code>{reg_no}</code>\n📱 Status: Mobile Not Found ❌\n💡 Reason: {err_msg}\n💰 User Balance: {current_balance}", parse_mode="HTML")
+            bot.send_message(ADMIN_ID, f"🔔 <b>Search Alert</b>\n👤 User ID: <code>{user_id}</code>\n🚗 Searched: <code>{reg_no}</code>\n📱 Status: Mobile Not Found ❌\n💰 User Balance: {current_balance}", parse_mode="HTML")
         except: pass
 
     def get_val(val1, val2=None, default="N/A"):

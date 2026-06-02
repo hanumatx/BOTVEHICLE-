@@ -1,4 +1,3 @@
-
 import requests
 import json
 import logging
@@ -45,8 +44,8 @@ AUTHORIZED_USERS = load_auth_users()
 
 # API Endpoints
 SMC_URL = "https://www.smcinsurance.com/central/centralcall/CallReqWithHeader"
-NUM_API = "https://opulexa.xo.je/"
-AADHAR_API = "https://aadharfam.onrender.com/full-search"
+NUM_API = "https://leakosint-by-noneusr.vercel.app/@None_usernam3/free/public/api"   # new base URL
+AADHAR_API = "https://pentestgpt-impds-api-finalapi.onrender.com/search-aadhaar"      # new API
 SPINNY_URL = "https://api.spinny.com/v3/api/vehicle/full-pan-details/"
 UPI_API = "https://api.truebalance.cc/v2/v2/payment/validateVPA"
 SPINNY_AUTH_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgzNDM5MDY2LCJqdGkiOiIxOTUyOTJkNDdiNjE0M2M2YjExNGUyOWQwMjc1OTA1NSIsInVzZXJfaWQiOjI3ODQxMzg3fQ.uAQg937MTs_4Dz7rgGXq28xVX7liEx6jIm0-1SL2SNc"
@@ -154,19 +153,14 @@ async def is_subscribed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> b
     chat_type = update.effective_chat.type
     first_name = update.effective_user.first_name
     
-    # Creator/Admin always bypasses all restrictions
     if user_id == ADMIN_ID:
         return True
 
-    # 1. HANDLE PRIVATE CHAT RESTRICTION
     if chat_type == "private":
         if user_id in AUTHORIZED_USERS:
             return True
         
-        # Modified: Prompt user to join and use the channel link
-        keyboard = [
-            [InlineKeyboardButton("📢 JOIN OUR CHANNEL", url=CHANNEL_LINK)]
-        ]
+        keyboard = [[InlineKeyboardButton("📢 JOIN OUR CHANNEL", url=CHANNEL_LINK)]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         private_error = (
             f"❌ *Access Denied, {escape_markdown(first_name)}!*\n\n"
@@ -179,7 +173,6 @@ async def is_subscribed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> b
             await update.message.reply_text(private_error, parse_mode='Markdown', reply_markup=reply_markup)
         return False
 
-    # 2. HANDLE GROUP CHATS (FREE + FORCE SUBSCRIBE)
     else:
         if user_id in AUTHORIZED_USERS:
             return True
@@ -210,25 +203,18 @@ async def is_subscribed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> b
 # --------------------------------------------
 
 async def access_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Admin command to whitelist a user ID for private chat use"""
-    user_id = update.effective_user.id
-    
-    if user_id != ADMIN_ID:
+    if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("❌ You are not authorized to use this command.")
         return
         
     if not context.args:
-        await update.message.reply_text(
-            "❌ Please provide a User ID!\n\nExample: `/access 123456789`", 
-            parse_mode='Markdown'
-        )
+        await update.message.reply_text("❌ Please provide a User ID!\n\nExample: `/access 123456789`", parse_mode='Markdown')
         return
         
     try:
         target_id = int(context.args[0])
         AUTHORIZED_USERS.add(target_id)
         save_auth_users(AUTHORIZED_USERS)
-        
         await update.message.reply_text(f"✅ User `{target_id}` has been approved for Private DM access.", parse_mode='Markdown')
     except ValueError:
         await update.message.reply_text("❌ Invalid User ID format. Numbers only.")
@@ -238,11 +224,7 @@ async def vehicle_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
         
     if not context.args:
-        await update.message.reply_text(
-            "❌ Please provide a registration number!\n\n"
-            "Example: `/vehicle UP42AL8182`",
-            parse_mode='Markdown'
-        )
+        await update.message.reply_text("❌ Please provide a registration number!\n\nExample: `/vehicle UP42AL8182`", parse_mode='Markdown')
         return
     
     registration_number = context.args[0].upper()
@@ -254,11 +236,9 @@ async def vehicle_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if response.status_code == 200:
             data = response.json()
-            
             if "response" in data and data["response"]:
                 vehicle_info = data["response"]
                 result_text = "🚗 *ALL VEHICLE DATA*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                
                 for key, value in vehicle_info.items():
                     if isinstance(value, dict):
                         result_text += f"\n🏦 *{key.upper()}*\n"
@@ -271,10 +251,8 @@ async def vehicle_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
                 reply_markup = InlineKeyboardMarkup(keyboard)
-                
                 if len(result_text) > 4000:
                     result_text = result_text[:4000] + "...\n(Message Truncated)"
-                    
                 await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
             else:
                 await msg.edit_text(f"❌ No vehicle data found for `{registration_number}`")
@@ -288,56 +266,32 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if not context.args:
-        await update.message.reply_text(
-            "❌ Please provide a mobile number!\n\nExample: `/num 7703994257`",
-            parse_mode='Markdown'
-        )
+        await update.message.reply_text("❌ Please provide a mobile number!\n\nExample: `/num 8052036881`", parse_mode='Markdown')
         return
     
-    mobile_number = context.args[0]
-    msg = await update.message.reply_text(f"🔍 Searching for `{mobile_number}`...\n⏳ Please wait...", parse_mode='Markdown')
+    raw_number = context.args[0].strip()
+    digits = ''.join(filter(str.isdigit, raw_number))
+    if len(digits) < 10:
+        await update.message.reply_text("❌ Please provide a valid 10-digit mobile number.")
+        return
+    mobile_10 = digits[-10:]
+    mobile_with_prefix = f"+91{mobile_10}"
+    
+    msg = await update.message.reply_text(f"🔍 Fetching raw data for `{mobile_with_prefix}`...\n⏳ Please wait...", parse_mode='Markdown')
     
     try:
-        url = f"https://opulexa.xo.je/?number={mobile_number}&i=1"
+        url = f"{NUM_API}?search={mobile_with_prefix}"
         response = session.get(url, timeout=60)
+        raw_text = response.text
         
-        if response.status_code == 200 and response.text:
-            try:
-                data = response.json()
-                result = data[0] if isinstance(data, list) and len(data) > 0 else data
-                
-                if result.get('success') and result.get('data'):
-                    card_data = result.get('data', {})
-                    members_text = ""
-                    for i, member in enumerate(card_data.get('members', []), 1):
-                        members_text += f"\n{i}. *{escape_markdown(member.get('member_name', 'N/A'))}*\n   └ {escape_markdown(member.get('gender', 'N/A'))} | {escape_markdown(member.get('relationship', 'N/A'))}\n   └ UID: {escape_markdown(member.get('uid_masked', 'N/A'))}\n"
-                    
-                    result_text = f"""
-📋 *RATION CARD DETAILS*
-━━━━━━━━━━━━━━━━━━━━━━━
-
-*Card No:* `{escape_markdown(result.get('ration_card_number', 'N/A'))}`
-
-*Details:*
-├ Type: {escape_markdown(card_data.get('card_type', 'N/A'))}
-├ Scheme: {escape_markdown(card_data.get('scheme', 'N/A'))}
-├ Issue: {escape_markdown(card_data.get('issue_date', 'N/A'))}
-├ State: {escape_markdown(card_data.get('state', 'N/A'))}
-├ District: {escape_markdown(card_data.get('district', 'N/A'))}
-└ Address: {escape_markdown(card_data.get('address', 'N/A'))}
-
-*Members ({len(card_data.get('members', []))}):*
-{members_text}
-                    """
-                    keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
-                    reply_markup = InlineKeyboardMarkup(keyboard)
-                    await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
-                else:
-                    await msg.edit_text(f"❌ No data found for `{mobile_number}`")
-            except:
-                await msg.edit_text("❌ Invalid response from server")
-        else:
-            await msg.edit_text("❌ No response from server")
+        # Truncate if too long (Telegram limit ~4096 chars)
+        if len(raw_text) > 4000:
+            raw_text = raw_text[:4000] + "\n... (response truncated)"
+        
+        result_text = f"📡 *RAW API RESPONSE*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n```\n{raw_text}\n```"
+        keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
     except Exception as e:
         await msg.edit_text(f"❌ Error: {str(e)[:100]}")
 
@@ -346,56 +300,30 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if not context.args:
-        await update.message.reply_text(
-            "❌ Please provide an Aadhaar number!\n\nExample: `/aadhar 123456789012`",
-            parse_mode='Markdown'
-        )
+        await update.message.reply_text("❌ Please provide an Aadhaar number!\n\nExample: `/aadhar 212028834716`", parse_mode='Markdown')
         return
     
-    aadhaar_number = context.args[0]
+    aadhaar_number = context.args[0].strip()
+    aadhaar_number = ''.join(filter(str.isdigit, aadhaar_number))
+    if len(aadhaar_number) != 12:
+        await update.message.reply_text("❌ Please provide a valid 12-digit Aadhaar number.")
+        return
+    
     safe_display = f"********{aadhaar_number[-4:]}" if len(aadhaar_number) >= 4 else "********"
-    msg = await update.message.reply_text(f"🔍 Searching for ID ending in `{safe_display}`...\n⏳ Please wait...", parse_mode='Markdown')
+    msg = await update.message.reply_text(f"🔍 Fetching raw data for Aadhaar ending `{safe_display}`...\n⏳ Please wait...", parse_mode='Markdown')
     
     try:
-        params = {"aadhaar": aadhaar_number}
+        params = {"search": "A", "aadhaar": aadhaar_number}
         response = session.get(AADHAR_API, params=params, timeout=90)
+        raw_text = response.text
         
-        if response.status_code == 200 and response.text:
-            try:
-                data = response.json()
-                if data.get('success'):
-                    details = data.get('details', {})
-                    card_info = details.get('card_info', {})
-                    members_text = ""
-                    for i, member in enumerate(details.get('members', []), 1):
-                        members_text += f"\n{i}. *{escape_markdown(member.get('member_name', 'N/A'))}*\n   └ {escape_markdown(member.get('gender', 'N/A'))} | {escape_markdown(member.get('relationship', 'N/A'))}\n   └ UID: {escape_markdown(member.get('uid_masked', 'N/A'))}\n"
-                    
-                    result_text = f"""
-📋 *RATION CARD DETAILS*
-━━━━━━━━━━━━━━━━━━━━━━━
-
-*Card ID:* `[Protected ID]`
-
-*Details:*
-├ Type: {escape_markdown(card_info.get('Card Type', 'N/A'))}
-├ Scheme: {escape_markdown(card_info.get('Scheme', 'N/A'))}
-├ State: {escape_markdown(card_info.get('State', 'N/A'))}
-├ District: {escape_markdown(card_info.get('District', 'N/A'))}
-├ Issue: {escape_markdown(card_info.get('Issue Date', 'N/A'))}
-└ Address: {escape_markdown(card_info.get('Address', 'N/A'))}
-
-*Members ({len(details.get('members', []))}):*
-{members_text}
-                    """
-                    keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
-                    reply_markup = InlineKeyboardMarkup(keyboard)
-                    await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
-                else:
-                    await msg.edit_text(f"❌ No data found.")
-            except:
-                await msg.edit_text("❌ Invalid response from server")
-        else:
-            await msg.edit_text("❌ No response from server")
+        if len(raw_text) > 4000:
+            raw_text = raw_text[:4000] + "\n... (response truncated)"
+        
+        result_text = f"📡 *RAW API RESPONSE*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n```\n{raw_text}\n```"
+        keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
     except Exception as e:
         await msg.edit_text(f"❌ Error: {str(e)[:100]}")
 
@@ -404,10 +332,7 @@ async def pan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if not context.args:
-        await update.message.reply_text(
-            "❌ Please provide a PAN number!\n\nExample: `/pan ACCPA2495F`",
-            parse_mode='Markdown'
-        )
+        await update.message.reply_text("❌ Please provide a PAN number!\n\nExample: `/pan ACCPA2495F`", parse_mode='Markdown')
         return
     
     pan_number = context.args[0].upper()
@@ -457,11 +382,7 @@ async def upi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if not context.args:
-        await update.message.reply_text(
-            "❌ Please provide a UPI ID / VPA!\n\n"
-            "Example: `/upi vipansharma1931141@okhdfcbank`",
-            parse_mode='Markdown'
-        )
+        await update.message.reply_text("❌ Please provide a UPI ID / VPA!\n\nExample: `/upi vipansharma1931141@okhdfcbank`", parse_mode='Markdown')
         return
     
     vpa_id = context.args[0]
@@ -527,8 +448,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *Select an option below:*
 
 🚗 *Vehicle Search* - Comprehensive vehicle info
-📱 *Ration (Mobile)* - Ration card by mobile number
-🆔 *Ration (Aadhaar)* - Ration card by Aadhaar
+📱 *Ration (Mobile)* - Raw API response for mobile number
+🆔 *Ration (Aadhaar)* - Raw API response for Aadhaar
 📇 *PAN Card* - PAN card details
 💳 *UPI Validation* - Validate UPI/VPA ID
 
@@ -536,8 +457,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 💡 *Commands:*
 `/vehicle UP32JK8979`
-`/num 7703994257`
-`/aadhar 123456789012`
+`/num 8052036881`
+`/aadhar 212028834716`
 `/pan ACCPA2495F`
 `/upi vipansharma1931141@okhdfcbank`
     """
@@ -574,42 +495,27 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
     elif data == "menu_vehicle":
         await query.edit_message_text(
-            "🚗 *VEHICLE SEARCH*\n\n"
-            "Please send the registration number.\n"
-            "Example: `UP32JK8979`\n\n"
-            "Type: `/vehicle UP32JK8979`",
+            "🚗 *VEHICLE SEARCH*\n\nPlease send the registration number.\nExample: `UP32JK8979`\n\nType: `/vehicle UP32JK8979`",
             parse_mode='Markdown'
         )
     elif data == "menu_num":
         await query.edit_message_text(
-            "📱 *RATION CARD BY MOBILE NUMBER*\n\n"
-            "Please send the mobile number.\n"
-            "Example: `7703994257`\n\n"
-            "Type: `/num 7703994257`",
+            "📱 *MOBILE NUMBER SEARCH (RAW)*\n\nPlease send the mobile number.\nExample: `8052036881`\n\nType: `/num 8052036881`",
             parse_mode='Markdown'
         )
     elif data == "menu_aadhar":
         await query.edit_message_text(
-            "🆔 *RATION CARD BY AADHAAR NUMBER*\n\n"
-            "Please send the Aadhaar number.\n"
-            "Example: `123456789012`\n\n"
-            "Type: `/aadhar 123456789012`",
+            "🆔 *AADHAAR SEARCH (RAW)*\n\nPlease send the Aadhaar number.\nExample: `212028834716`\n\nType: `/aadhar 212028834716`",
             parse_mode='Markdown'
         )
     elif data == "menu_pan":
         await query.edit_message_text(
-            "📇 *PAN CARD SEARCH*\n\n"
-            "Please send the PAN number.\n"
-            "Example: `ACCPA2495F`\n\n"
-            "Type: `/pan ACCPA2495F`",
+            "📇 *PAN CARD SEARCH*\n\nPlease send the PAN number.\nExample: `ACCPA2495F`\n\nType: `/pan ACCPA2495F`",
             parse_mode='Markdown'
         )
     elif data == "menu_upi":
         await query.edit_message_text(
-            "💳 *UPI VALIDATION*\n\n"
-            "Please send the UPI ID / VPA.\n"
-            "Example: `vipansharma1931141@okhdfcbank`\n\n"
-            "Type: `/upi vipansharma1931141@okhdfcbank`",
+            "💳 *UPI VALIDATION*\n\nPlease send the UPI ID / VPA.\nExample: `vipansharma1931141@okhdfcbank`\n\nType: `/upi vipansharma1931141@okhdfcbank`",
             parse_mode='Markdown'
         )
     elif data == "menu_help":
@@ -621,8 +527,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *Available Commands:*
 
 🚗 `/vehicle` - Full vehicle search
-📱 `/num` - Ration by mobile
-🆔 `/aadhar` - Ration by Aadhaar
+📱 `/num` - Raw API response for mobile number (+91 added)
+🆔 `/aadhar` - Raw API response for Aadhaar
 📇 `/pan` - PAN card details
 💳 `/upi` - Validate UPI ID
 
@@ -630,8 +536,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 *Examples:*
 `/vehicle UP32JK8979`
-`/num 7703994257`
-`/aadhar 123456789012`
+`/num 8052036881`
+`/aadhar 212028834716`
 `/pan ACCPA2495F`
 `/upi vipansharma1931141@okhdfcbank`
         """
@@ -673,4 +579,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

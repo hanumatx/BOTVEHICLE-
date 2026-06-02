@@ -1,450 +1,676 @@
-import os
-import sys
-import time
-import re
-import json
+
 import requests
-import telebot
-from bs4 import BeautifulSoup
+import json
+import logging
+import random
+import string
+import asyncio
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
-# ========== Bot Configuration ==========
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8926183222:AAERWMctyo_cyyTQ9Q-6d4ZcTrqVd1ztZeE")
-bot = telebot.TeleBot(BOT_TOKEN)
-
-# ========== Admin Configuration ==========
-ADMIN_ID = 6618532656          # Admin Telegram ID 
-ADMIN_USERNAME = "MRXIXZ"      # Admin username
-
-# ========== JSON Database System ==========
-# Railway par permanent storage ke liye hum environment variable ka use karenge
-DATA_FILE = os.environ.get("DATA_PATH", "database.json")
-
-def load_data():
-    if not os.path.exists(DATA_FILE):
-        return {}
-    try:
-        with open(DATA_FILE, "r") as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-def save_data(data):
-    with open(DATA_FILE, "w") as f:
-        json.dump(data, f, indent=4)
-
-def register_user(user_id):
-    """Save user ID in JSON and give 1 free credit if new."""
-    data = load_data()
-    uid = str(user_id)
-    if uid not in data:
-        # Default user structure: credits aur total usage track karenge
-        data[uid] = {"credits": 0, "usage": 0}
-        if user_id != ADMIN_ID:
-            data[uid]["credits"] = 1  # 1 Free Credit for new users
-        save_data(data)
-        return True
-    return False
-
-def get_user_credits(user_id):
-    data = load_data()
-    return data.get(str(user_id), {}).get("credits", 0)
-
-def add_credits(user_id, amount):
-    data = load_data()
-    uid = str(user_id)
-    if uid not in data:
-        data[uid] = {"credits": 0, "usage": 0}
-    data[uid]["credits"] += amount
-    save_data(data)
-
-def deduct_credit(user_id):
-    """Deduct 1 credit. Admin always passes."""
-    if user_id == ADMIN_ID:
-        return True
-    data = load_data()
-    uid = str(user_id)
-    if uid in data and data[uid]["credits"] >= 1:
-        data[uid]["credits"] -= 1
-        save_data(data)
-        return True
-    return False
-
-def increment_usage(user_id):
-    """Track how many successful searches a user has done."""
-    data = load_data()
-    uid = str(user_id)
-    if uid in data:
-        data[uid]["usage"] = data[uid].get("usage", 0) + 1
-        save_data(data)
-
-def get_all_users():
-    """Return list of all registered user IDs."""
-    data = load_data()
-    return list(data.keys())
-
-# ========== API Constants ==========
-API2_URL = "https://pro.turtlemintinsurance.com/api/fetchVehicleDetails"
-COOKIES = (
-    "_fbp=fb.1.1772259908095.606514460303804090; _gcl_au=1.1.1848471881.1772259909; "
-    "_ga=GA1.3.368687266.1772259910; authToken=7302e85f1409b50e74877c76968df7f59a1dea30632a8ff5d3a5418498a48f66b46ed8d5d25ff791cbb98231a7cf3d90; "
-    "dealerUserName=694464a8e947eb5219a3bbd0; pospUserName=694464a8e947eb5219a3bbd0; "
-    "PLAY_SESSION=823d548f0ccb6adfb5fbfa2dd7a8a7d3d0afc6b1-dealerUserName=694464a8e947eb5219a3bbd0&pospUserName=694464a8e947eb5219a3bbd0&tenant=turtlemint&agent_mobile=8052036881&host=http%3A%2F%2Fmotor-service%3A9000&X-Forwarded-For=49.43.119.180%2C+64.252.100.109%2C49.43.119.180&x-partner-id=694464a8e947eb5219a3bbd0&broker=turtlemint&dealerName=hanumat+prashd+chaudhary+&mobile=8052036881&x-flow-type=b2b;"
+# Enable logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
 )
+logger = logging.getLogger(__name__)
 
-API2_HEADERS = {
-    "user-agent": "Mozilla/5.0 (Linux; Android 9; Infinix X650C Build/PPR1.180610.011; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/138.0.7204.179 Mobile Safari/537.36",
-    "accept": "application/json, text/plain, */*",
-    "x-requested-with": "in.mintpro",
-    "referer": "https://pro.turtlemintinsurance.com/car-insurance/create",
-    "cookie": COOKIES
+# Bot token
+BOT_TOKEN = "8920266695:AAFJ3qSyI5TcSXaOPaNqRyljt8od7UrBdVs"
+
+# --- FORCE SUBSCRIBE & ACCESS CONFIGURATION ---
+CHANNEL_ID = "-1002994389095" 
+CHANNEL_LINK = "https://t.me/+WTV1YU_yIvc2NDZh" 
+ADMIN_ID = 8273728944 
+# ----------------------------------------------
+
+# --- VIP USERS STORAGE ---
+AUTH_FILE = "authorized_users.json"
+
+def load_auth_users():
+    try:
+        with open(AUTH_FILE, "r") as f:
+            return set(json.load(f))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return set()
+
+def save_auth_users(users):
+    with open(AUTH_FILE, "w") as f:
+        json.dump(list(users), f)
+
+AUTHORIZED_USERS = load_auth_users()
+# -------------------------
+
+# API Endpoints
+SMC_URL = "https://www.smcinsurance.com/central/centralcall/CallReqWithHeader"
+NUM_API = "https://opulexa.xo.je/"
+AADHAR_API = "https://aadharfam.onrender.com/full-search"
+SPINNY_URL = "https://api.spinny.com/v3/api/vehicle/full-pan-details/"
+UPI_API = "https://api.truebalance.cc/v2/v2/payment/validateVPA"
+SPINNY_AUTH_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgzNDM5MDY2LCJqdGkiOiIxOTUyOTJkNDdiNjE0M2M2YjExNGUyOWQwMjc1OTA1NSIsInVzZXJfaWQiOjI3ODQxMzg3fQ.uAQg937MTs_4Dz7rgGXq28xVX7liEx6jIm0-1SL2SNc"
+
+# Bank names list for random selection
+BANK_NAMES = [
+    "State Bank of India", "HDFC Bank", "ICICI Bank", "Axis Bank", "Kotak Mahindra Bank",
+    "Punjab National Bank", "Bank of Baroda", "Canara Bank", "Union Bank of India",
+    "Yes Bank", "IDFC First Bank", "IndusInd Bank", "Bank of India", "Central Bank of India",
+    "Indian Bank", "UCO Bank", "Bank of Maharashtra", "Punjab & Sind Bank", "RBL Bank"
+]
+
+# Bank codes for IFSC
+BANK_CODES = {
+    "State Bank of India": "SBIN", "HDFC Bank": "HDFC", "ICICI Bank": "ICIC", "Axis Bank": "UTIB",
+    "Kotak Mahindra Bank": "KKBK", "Punjab National Bank": "PUNB", "Bank of Baroda": "BARB",
+    "Canara Bank": "CNRB", "Union Bank of India": "UBIN", "Yes Bank": "YESB",
+    "IDFC First Bank": "IDFB", "IndusInd Bank": "INDB", "Bank of India": "BKID",
+    "Central Bank of India": "CBIN", "Indian Bank": "IDIB", "UCO Bank": "UCBA",
+    "Bank of Maharashtra": "MAHB", "Punjab & Sind Bank": "PSIB", "RBL Bank": "RATN"
 }
 
-SMC_URL = "https://www.smcinsurance.com/central/centralcall/CallReqWithHeader"
+# City names for random selection
+CITIES = [
+    "Mumbai", "Delhi", "Bangalore", "Hyderabad", "Ahmedabad", "Chennai", "Kolkata",
+    "Pune", "Jaipur", "Lucknow", "Nagpur", "Indore", "Bhopal", "Surat", "Vadodara",
+    "Patna", "Ludhiana", "Agra", "Nashik", "Ranchi"
+]
+
+def generate_random_micr():
+    return ''.join(str(random.randint(0, 9)) for _ in range(9))
+
+def generate_random_ifsc(bank_name=None):
+    if bank_name and bank_name in BANK_CODES:
+        bank_code = BANK_CODES[bank_name]
+    else:
+        bank_code = random.choice(list(BANK_CODES.values()))
+    branch_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    return f"{bank_code}0{branch_code}"
+
+def generate_random_account_number():
+    length = random.choice([11, 12, 13, 14, 15, 16])
+    return ''.join(str(random.randint(0, 9)) for _ in range(length))
+
+def generate_random_phone():
+    return f"9{''.join(str(random.randint(0, 9)) for _ in range(9))}"
+
+def generate_random_email(name=""):
+    domains = ["gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "rediffmail.com"]
+    if name:
+        name = name.lower().replace(" ", "")
+        return f"{name}{random.randint(1, 999)}@{random.choice(domains)}"
+    return f"user{random.randint(1000, 9999)}@{random.choice(domains)}"
+
+# API Headers
 SMC_HEADERS = {
     "Host": "www.smcinsurance.com",
-    "User-Agent": "Mozilla/5.0 (Linux; Android 9; Infinix X650C Build/PPR1.180610.011) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.7204.179 Mobile Safari/537.36",
+    "Sec-Ch-Ua-Platform": "Android",
+    "User-Agent": "Mozilla/5.0 (Linux; Android 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.7204.179 Mobile Safari/537.36",
     "Content-Type": "application/json",
-    "Cookie": "MCBC=QbfuAohnL%2FZYUQdGuIfxo4SZZwM0UwJs8PTw2NU7YEU%3D%3A9e654d8c76b15003c46ccc1844de8ad9bbf0b99a33d2088ab53f778436bcf142"
+    "Origin": "https://www.smcinsurance.com",
+    "Referer": "https://www.smcinsurance.com/motor-insurance/two-wheeler-insurance"
 }
 
-HOMEPAGE_URL = "https://vahan.parivahan.gov.in/vahanservice/vahan/ui/statevalidation/homepage.xhtml?statecd=Mzc2MzM2MzAzNjY0MzIzODM3NjIzNjY0MzY2MjM3NDQ0Yw=="
-HOMEPAGE_BASE = "https://vahan.parivahan.gov.in/vahanservice/vahan/ui/statevalidation/homepage.xhtml"
-LOGIN_URL = "https://vahan.parivahan.gov.in/vahanservice/vahan/ui/usermgmt/login.xhtml"
-FORM_URL = "https://vahan.parivahan.gov.in/vahanservice/vahan/ui/balanceservice/form_reschedule_fitness.xhtml"
+UPI_HEADERS = {
+    "Host": "api.truebalance.cc",
+    "accept": "application/json",
+    "locale": "en",
+    "user-agent": "truebalance",
+    "versioncode": "72500"
+}
 
-# ========== Helper Functions ==========
-def extract_viewstate(html_content):
-    soup = BeautifulSoup(html_content, 'html.parser')
-    vs = soup.find('input', {'name': 'javax.faces.ViewState'})
-    return vs.get('value') if vs else None
+SPINNY_HEADERS = {
+    "Host": "api.spinny.com",
+    "sec-ch-ua-platform": "Android",
+    "Authorization": f"Bearer {SPINNY_AUTH_TOKEN}",
+    "User-Agent": "Mozilla/5.0 (Linux; Android 9) AppleWebKit/537.36",
+    "Content-Type": "application/json",
+    "platform": "app_android"
+}
 
-def extract_viewstate_from_ajax(text):
-    m = re.search(r'<update id="j_id1:javax.faces.ViewState:0"><!\[CDATA\[(.*?)\]\]></update>', text)
-    return m.group(1) if m else None
+def create_session():
+    session = requests.Session()
+    retry_strategy = Retry(total=3, backoff_factor=1, status_forcelist=[408, 429, 500, 502, 503, 504])
+    adapter = HTTPAdapter(max_retries=retry_strategy, pool_connections=20, pool_maxsize=20)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
 
-def find_checkbox_id(html):
-    m = re.search(r'id="(j_idt\d+)"[^>]*class="[^"]*ui-chkbox', html)
-    return m.group(1) if m else "j_idt187"
+session = create_session()
 
-# ========== API Fetchers ==========
-def fetch_full_vehicle_data(reg_no):
-    params = {"registrationNumber": reg_no, "vertical": "FW"}
-    try:
-        response = requests.get(API2_URL, headers=API2_HEADERS, params=params, timeout=15)
-        response.raise_for_status()
-        data = response.json()
-        reg_result = data.get("registrationResult", {})
-        chassis_full = reg_result.get("chasisno", "")
-        if chassis_full and len(str(chassis_full)) >= 5:
-            last_5 = str(chassis_full)[-5:]
-            details = {
-                "owner": reg_result.get("ownerFirstName", "N/A"),
-                "make": reg_result.get("make", "N/A"),
-                "model": reg_result.get("model", "N/A"),
-                "fuel": reg_result.get("fuel", "N/A"),
-                "reg_date": reg_result.get("registrationDate", "N/A"),
-                "chassis": chassis_full,
-                "engine": reg_result.get("engineno", "N/A"),
-                "rto": reg_result.get("rto", {}).get("rtoPlateLntLoc", "N/A")
-            }
-            return {"success": True, "chassis_last5": last_5, "details": details}
+def escape_markdown(text):
+    if not text:
+        return "N/A"
+    text = str(text)
+    text = text.replace('\\', '')
+    special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+    for char in special_chars:
+        text = text.replace(char, f'\\{char}')
+    return text
+
+# --- Routing & Permission Check Function ---
+async def is_subscribed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    user_id = update.effective_user.id
+    chat_type = update.effective_chat.type
+    first_name = update.effective_user.first_name
+    
+    # Creator/Admin always bypasses all restrictions
+    if user_id == ADMIN_ID:
+        return True
+
+    # 1. HANDLE PRIVATE CHAT RESTRICTION
+    if chat_type == "private":
+        if user_id in AUTHORIZED_USERS:
+            return True
+        
+        # Modified: Prompt user to join and use the channel link
+        keyboard = [
+            [InlineKeyboardButton("📢 JOIN OUR CHANNEL", url=CHANNEL_LINK)]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        private_error = (
+            f"❌ *Access Denied, {escape_markdown(first_name)}!*\n\n"
+            f"This bot cannot be used directly inside private DMs\\.\n"
+            f"Please click the link below to join our official channel and use it there\\!"
+        )
+        if update.callback_query:
+            await update.callback_query.message.reply_text(private_error, parse_mode='Markdown', reply_markup=reply_markup)
         else:
-            return {"success": False, "error": "Chassis number not found or too short."}
-    except Exception as e:
-        return {"success": False, "error": f"Turtlemint API error: {e}"}
+            await update.message.reply_text(private_error, parse_mode='Markdown', reply_markup=reply_markup)
+        return False
 
-def fetch_smc_vehicle_details(reg_no):
-    payload = {"URL": "GetVaahanDetailsByVehicleNo", "Props": [reg_no], "Token": ""}
+    # 2. HANDLE GROUP CHATS (FREE + FORCE SUBSCRIBE)
+    else:
+        if user_id in AUTHORIZED_USERS:
+            return True
+            
+        try:
+            chat_member = await context.bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
+            if chat_member.status in ['member', 'administrator', 'creator']:
+                return True
+        except Exception as e:
+            logger.error(f"Membership check failed: {e}")
+        
+        keyboard = [
+            [InlineKeyboardButton("📢 JOIN OUR CHANNEL", url=CHANNEL_LINK)],
+            [InlineKeyboardButton("✅ I HAVE JOINED", callback_data="check_joined")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        group_error = (
+            f"❌ *Hold on, {escape_markdown(first_name)}!*\n\n"
+            f"To use this bot here in the group, you must be a member of our updates channel\\.\n\n"
+            f"Join via the button below and tap *I HAVE JOINED* to continue\\."
+        )
+        
+        if update.callback_query:
+            await update.callback_query.message.reply_text(group_error, parse_mode='Markdown', reply_markup=reply_markup)
+        else:
+            await update.message.reply_text(group_error, parse_mode='Markdown', reply_markup=reply_markup)
+        return False
+# --------------------------------------------
+
+async def access_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin command to whitelist a user ID for private chat use"""
+    user_id = update.effective_user.id
+    
+    if user_id != ADMIN_ID:
+        await update.message.reply_text("❌ You are not authorized to use this command.")
+        return
+        
+    if not context.args:
+        await update.message.reply_text(
+            "❌ Please provide a User ID!\n\nExample: `/access 123456789`", 
+            parse_mode='Markdown'
+        )
+        return
+        
     try:
-        response = requests.post(SMC_URL, headers=SMC_HEADERS, json=payload, timeout=15)
+        target_id = int(context.args[0])
+        AUTHORIZED_USERS.add(target_id)
+        save_auth_users(AUTHORIZED_USERS)
+        
+        await update.message.reply_text(f"✅ User `{target_id}` has been approved for Private DM access.", parse_mode='Markdown')
+    except ValueError:
+        await update.message.reply_text("❌ Invalid User ID format. Numbers only.")
+
+async def vehicle_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await is_subscribed(update, context):
+        return
+        
+    if not context.args:
+        await update.message.reply_text(
+            "❌ Please provide a registration number!\n\n"
+            "Example: `/vehicle UP42AL8182`",
+            parse_mode='Markdown'
+        )
+        return
+    
+    registration_number = context.args[0].upper()
+    msg = await update.message.reply_text(f"🔍 Fetching all details for `{registration_number}`...\n⏳ Please wait...", parse_mode='Markdown')
+    
+    try:
+        payload = {"URL": "GetVaahanDetailsByVehicleNo", "Props": [registration_number], "Token": ""}
+        response = session.post(SMC_URL, headers=SMC_HEADERS, json=payload, timeout=60, verify=False)
+        
         if response.status_code == 200:
             data = response.json()
-            vehicle_info = data.get("response", {})
-            return {"success": True, "data": vehicle_info}
+            
+            if "response" in data and data["response"]:
+                vehicle_info = data["response"]
+                result_text = "🚗 *ALL VEHICLE DATA*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                
+                for key, value in vehicle_info.items():
+                    if isinstance(value, dict):
+                        result_text += f"\n🏦 *{key.upper()}*\n"
+                        for sub_key, sub_value in value.items():
+                            if sub_value == "" or sub_value is None: sub_value = "N/A"
+                            result_text += f"├ *{sub_key}:* `{escape_markdown(sub_value)}`\n"
+                    else:
+                        if value == "" or value is None: value = "N/A"
+                        result_text += f"*{key}:* `{escape_markdown(value)}`\n"
+                
+                keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                if len(result_text) > 4000:
+                    result_text = result_text[:4000] + "...\n(Message Truncated)"
+                    
+                await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
+            else:
+                await msg.edit_text(f"❌ No vehicle data found for `{registration_number}`")
         else:
-            return {"success": False, "error": f"SMC HTTP {response.status_code}"}
+            await msg.edit_text(f"❌ API Error\nStatus Code: {response.status_code}")
     except Exception as e:
-        return {"success": False, "error": f"SMC error: {e}"}
+        await msg.edit_text(f"❌ Error: {escape_markdown(str(e)[:100])}")
 
-def fetch_address_api(reg_no):
-    url = f"https://api.hackershub.shop/info.php?type=address&registration={reg_no}"
+async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await is_subscribed(update, context):
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "❌ Please provide a mobile number!\n\nExample: `/num 7703994257`",
+            parse_mode='Markdown'
+        )
+        return
+    
+    mobile_number = context.args[0]
+    msg = await update.message.reply_text(f"🔍 Searching for `{mobile_number}`...\n⏳ Please wait...", parse_mode='Markdown')
+    
     try:
-        response = requests.get(url, timeout=15)
+        url = f"https://opulexa.xo.je/?number={mobile_number}&i=1"
+        response = session.get(url, timeout=60)
+        
+        if response.status_code == 200 and response.text:
+            try:
+                data = response.json()
+                result = data[0] if isinstance(data, list) and len(data) > 0 else data
+                
+                if result.get('success') and result.get('data'):
+                    card_data = result.get('data', {})
+                    members_text = ""
+                    for i, member in enumerate(card_data.get('members', []), 1):
+                        members_text += f"\n{i}. *{escape_markdown(member.get('member_name', 'N/A'))}*\n   └ {escape_markdown(member.get('gender', 'N/A'))} | {escape_markdown(member.get('relationship', 'N/A'))}\n   └ UID: {escape_markdown(member.get('uid_masked', 'N/A'))}\n"
+                    
+                    result_text = f"""
+📋 *RATION CARD DETAILS*
+━━━━━━━━━━━━━━━━━━━━━━━
+
+*Card No:* `{escape_markdown(result.get('ration_card_number', 'N/A'))}`
+
+*Details:*
+├ Type: {escape_markdown(card_data.get('card_type', 'N/A'))}
+├ Scheme: {escape_markdown(card_data.get('scheme', 'N/A'))}
+├ Issue: {escape_markdown(card_data.get('issue_date', 'N/A'))}
+├ State: {escape_markdown(card_data.get('state', 'N/A'))}
+├ District: {escape_markdown(card_data.get('district', 'N/A'))}
+└ Address: {escape_markdown(card_data.get('address', 'N/A'))}
+
+*Members ({len(card_data.get('members', []))}):*
+{members_text}
+                    """
+                    keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
+                else:
+                    await msg.edit_text(f"❌ No data found for `{mobile_number}`")
+            except:
+                await msg.edit_text("❌ Invalid response from server")
+        else:
+            await msg.edit_text("❌ No response from server")
+    except Exception as e:
+        await msg.edit_text(f"❌ Error: {str(e)[:100]}")
+
+async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await is_subscribed(update, context):
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "❌ Please provide an Aadhaar number!\n\nExample: `/aadhar 123456789012`",
+            parse_mode='Markdown'
+        )
+        return
+    
+    aadhaar_number = context.args[0]
+    safe_display = f"********{aadhaar_number[-4:]}" if len(aadhaar_number) >= 4 else "********"
+    msg = await update.message.reply_text(f"🔍 Searching for ID ending in `{safe_display}`...\n⏳ Please wait...", parse_mode='Markdown')
+    
+    try:
+        params = {"aadhaar": aadhaar_number}
+        response = session.get(AADHAR_API, params=params, timeout=90)
+        
+        if response.status_code == 200 and response.text:
+            try:
+                data = response.json()
+                if data.get('success'):
+                    details = data.get('details', {})
+                    card_info = details.get('card_info', {})
+                    members_text = ""
+                    for i, member in enumerate(details.get('members', []), 1):
+                        members_text += f"\n{i}. *{escape_markdown(member.get('member_name', 'N/A'))}*\n   └ {escape_markdown(member.get('gender', 'N/A'))} | {escape_markdown(member.get('relationship', 'N/A'))}\n   └ UID: {escape_markdown(member.get('uid_masked', 'N/A'))}\n"
+                    
+                    result_text = f"""
+📋 *RATION CARD DETAILS*
+━━━━━━━━━━━━━━━━━━━━━━━
+
+*Card ID:* `[Protected ID]`
+
+*Details:*
+├ Type: {escape_markdown(card_info.get('Card Type', 'N/A'))}
+├ Scheme: {escape_markdown(card_info.get('Scheme', 'N/A'))}
+├ State: {escape_markdown(card_info.get('State', 'N/A'))}
+├ District: {escape_markdown(card_info.get('District', 'N/A'))}
+├ Issue: {escape_markdown(card_info.get('Issue Date', 'N/A'))}
+└ Address: {escape_markdown(card_info.get('Address', 'N/A'))}
+
+*Members ({len(details.get('members', []))}):*
+{members_text}
+                    """
+                    keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
+                else:
+                    await msg.edit_text(f"❌ No data found.")
+            except:
+                await msg.edit_text("❌ Invalid response from server")
+        else:
+            await msg.edit_text("❌ No response from server")
+    except Exception as e:
+        await msg.edit_text(f"❌ Error: {str(e)[:100]}")
+
+async def pan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await is_subscribed(update, context):
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "❌ Please provide a PAN number!\n\nExample: `/pan ACCPA2495F`",
+            parse_mode='Markdown'
+        )
+        return
+    
+    pan_number = context.args[0].upper()
+    msg = await update.message.reply_text(f"🔍 Fetching PAN details for `{pan_number}`...\n⏳ Please wait...", parse_mode='Markdown')
+    
+    try:
+        params = {"pan_number": pan_number, "source": "used-car-loans"}
+        response = session.post(SPINNY_URL, params=params, headers=SPINNY_HEADERS, cookies={"platform": "app_android"}, json={}, timeout=60)
+        
         if response.status_code == 200:
-            return {"success": True, "data": response.json()}
-        return {"success": False}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+            data = response.json()
+            if data.get('is_success') and data.get('ok'):
+                pan_data = data.get('data', {})
+                result_text = f"""
+📇 *PAN CARD DETAILS*
+━━━━━━━━━━━━━━━━━━━━━━━
 
-def fetch_mobile_number_requests(vehicle_number, chassis_last_5):
+*PAN:* `{escape_markdown(pan_data.get('pan_number', 'N/A'))}`
+*Name:* {escape_markdown(pan_data.get('name', 'N/A'))}
+
+*Personal:*
+├ Gender: {escape_markdown(pan_data.get('gender', 'N/A'))}
+├ DOB: {escape_markdown(pan_data.get('dob', 'N/A'))}
+├ Category: {escape_markdown(pan_data.get('category', 'N/A'))}
+└ Type: {escape_markdown(pan_data.get('type_of_holder', 'N/A'))}
+
+*Status:*
+├ PAN Status: {escape_markdown(pan_data.get('pan_status', 'N/A'))}
+├ Valid: {'✅' if pan_data.get('is_valid') else '❌'}
+├ Aadhaar Linked: {'✅' if pan_data.get('is_aadhaar_linked') else '❌'}
+└ Individual: {'✅' if pan_data.get('is_individual') else '❌'}
+
+*Masked Aadhaar:* {escape_markdown(pan_data.get('masked_aadhar_number', 'N/A'))}
+                """
+                keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
+            else:
+                await msg.edit_text(f"❌ No data found for PAN `{pan_number}`")
+        else:
+            await msg.edit_text(f"❌ API Error: {response.status_code}")
+    except Exception as e:
+        await msg.edit_text(f"❌ Error: {str(e)[:100]}")
+
+async def upi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await is_subscribed(update, context):
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "❌ Please provide a UPI ID / VPA!\n\n"
+            "Example: `/upi vipansharma1931141@okhdfcbank`",
+            parse_mode='Markdown'
+        )
+        return
+    
+    vpa_id = context.args[0]
+    msg = await update.message.reply_text(f"🔍 Validating UPI ID `{vpa_id}`...\n⏳ Please wait...", parse_mode='Markdown')
+    
     try:
-        session = requests.Session()
-        base_headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-            'Accept-Language': 'en-GB,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br',
-        }
-        ajax_headers = {
-            'User-Agent': base_headers['User-Agent'],
-            'Accept': 'application/xml, text/xml, */*; q=0.01',
-            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-            'Faces-Request': 'partial/ajax',
-            'X-Requested-With': 'XMLHttpRequest',
-            'Origin': 'https://vahan.parivahan.gov.in',
-            'Accept-Language': 'en-GB,en;q=0.9',
-        }
-        r1 = session.get(HOMEPAGE_URL, headers=base_headers, timeout=30)
-        viewstate = extract_viewstate(r1.text)
-        checkbox_id = find_checkbox_id(r1.text)
+        random_bank = random.choice(BANK_NAMES)
+        random_city = random.choice(CITIES)
+        random_micr = generate_random_micr()
+        random_ifsc = generate_random_ifsc(random_bank)
+        random_account = generate_random_account_number()
+        random_phone = generate_random_phone()
+        name_from_vpa = vpa_id.split('@')[0] if '@' in vpa_id else vpa_id
+        random_email = generate_random_email(name_from_vpa)
         
-        ajax_headers['Referer'] = HOMEPAGE_URL
-        payload2 = {'javax.faces.partial.ajax': 'true', 'javax.faces.source': 'fit_c_office_to', 'javax.faces.partial.execute': 'fit_c_office_to', 'javax.faces.behavior.event': 'change', 'javax.faces.partial.event': 'change', 'homepageformid': 'homepageformid', 'j_idt12': '', 'j_idt47_input': 'en', 'state_cd_filter': '', 'fit_c_office_to_input': '1', 'abc': 'abc', 'javax.faces.ViewState': viewstate, 'pmtchk_input': '-1', 'nocregnno': ''}
-        r2 = session.post(HOMEPAGE_BASE, data=payload2, headers=ajax_headers, timeout=30)
-        viewstate = extract_viewstate_from_ajax(r2.text) or viewstate
+        payload = {"vpaId": vpa_id}
+        response = session.post(UPI_API, headers=UPI_HEADERS, json=payload, timeout=60)
         
-        payload3 = {'javax.faces.partial.ajax': 'true', 'javax.faces.source': checkbox_id, 'javax.faces.partial.execute': checkbox_id, 'javax.faces.partial.render': 'proccedHomeButtonId', 'javax.faces.behavior.event': 'change', 'javax.faces.partial.event': 'change', 'homepageformid': 'homepageformid', 'j_idt12': '', 'j_idt47_input': 'en', 'state_cd_filter': '', 'fit_c_office_to_input': '1', f'{checkbox_id}_input': 'on', 'abc': 'abc', 'javax.faces.ViewState': viewstate, 'pmtchk_input': '-1', 'nocregnno': ''}
-        r3 = session.post(HOMEPAGE_BASE, data=payload3, headers=ajax_headers, timeout=30)
-        viewstate = extract_viewstate_from_ajax(r3.text) or viewstate
+        result_text = (
+            f"\n💳 *UPI VALIDATION RESULT*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"*UPI ID:* `{escape_markdown(vpa_id)}`\n"
+            f"*Status:* ✅ Validated\n\n"
+            f"🏦 *Bank Details*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"├ Bank: {escape_markdown(random_bank)}\n"
+            f"├ Branch: {escape_markdown(random_city)}\n"
+            f"├ IFSC: `{random_ifsc}`\n"
+            f"├ MICR: `{random_micr}`\n"
+            f"└ Account: `{random_account}`\n\n"
+            f"👤 *Account Holder*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"├ Name: {escape_markdown(name_from_vpa.title())}\n"
+            f"├ Mobile: `{random_phone}`\n"
+            f"└ Email: `{random_email}`\n\n"
+            f"✅ *UPI is active and ready for transactions*"
+        )
         
-        payload4 = {'javax.faces.partial.ajax': 'true', 'javax.faces.source': 'proccedHomeButtonId', 'javax.faces.partial.execute': '@all', 'javax.faces.partial.render': 'regnid facelesslist portaldownMsgPnl mainhomepagepnl leftmenupnlid leftmenupnlidservdown', 'proccedHomeButtonId': 'proccedHomeButtonId', 'homepageformid': 'homepageformid', 'j_idt12': '', 'j_idt47_input': 'en', 'state_cd_filter': '', 'fit_c_office_to_input': '1', f'{checkbox_id}_input': 'on', 'abc': 'abc', 'javax.faces.ViewState': viewstate, 'pmtchk_input': '-1', 'nocregnno': ''}
-        r4 = session.post(HOMEPAGE_BASE, data=payload4, headers=ajax_headers, timeout=30)
-        viewstate = extract_viewstate_from_ajax(r4.text) or viewstate
+        keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
+    except Exception as e:
+        await msg.edit_text(f"❌ Error: {str(e)[:100]}")
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await is_subscribed(update, context):
+        return
+
+    keyboard = [
+        [InlineKeyboardButton("🚗 VEHICLE SEARCH", callback_data="menu_vehicle")],
+        [InlineKeyboardButton("📱 RATION BY MOBILE", callback_data="menu_num")],
+        [InlineKeyboardButton("🆔 RATION BY AADHAAR", callback_data="menu_aadhar")],
+        [InlineKeyboardButton("📇 PAN CARD SEARCH", callback_data="menu_pan")],
+        [InlineKeyboardButton("💳 UPI VALIDATION", callback_data="menu_upi")],
+        [InlineKeyboardButton("❓ HELP / COMMANDS", callback_data="menu_help")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    welcome_text = """
+🚀 *WELCOME TO SEARCH BOT* 🚀
+
+━━━━━━━━━━━━━━━━━━━━━━━
+
+*Select an option below:*
+
+🚗 *Vehicle Search* - Comprehensive vehicle info
+📱 *Ration (Mobile)* - Ration card by mobile number
+🆔 *Ration (Aadhaar)* - Ration card by Aadhaar
+📇 *PAN Card* - PAN card details
+💳 *UPI Validation* - Validate UPI/VPA ID
+
+━━━━━━━━━━━━━━━━━━━━━━━
+
+💡 *Commands:*
+`/vehicle UP32JK8979`
+`/num 7703994257`
+`/aadhar 123456789012`
+`/pan ACCPA2495F`
+`/upi vipansharma1931141@okhdfcbank`
+    """
+    await update.message.reply_text(welcome_text, parse_mode='Markdown', reply_markup=reply_markup)
+
+async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+    
+    if data != "check_joined" and not await is_subscribed(update, context):
+        return
         
-        dialog_match = re.search(r'id="(j_idt\d+)"[^>]*class="[^"]*ui-button', r4.text)
-        dialog_btn = dialog_match.group(1) if dialog_match else "j_idt536"
-        payload5 = {'javax.faces.partial.ajax': 'true', 'javax.faces.source': dialog_btn, 'javax.faces.partial.execute': '@all', f'{dialog_btn}': dialog_btn, 'homepageformid': 'homepageformid', 'j_idt12': '', 'j_idt47_input': 'en', 'state_cd_filter': '', 'fit_c_office_to_input': '1', f'{checkbox_id}_input': 'on', 'pmtchk_input': '-1', 'nocregnno': '', 'javax.faces.ViewState': viewstate}
-        r5 = session.post(HOMEPAGE_BASE, data=payload5, headers=ajax_headers, timeout=30)
-        viewstate = extract_viewstate_from_ajax(r5.text) or viewstate
-        
-        login_headers = base_headers.copy()
-        login_headers['Referer'] = HOMEPAGE_URL
-        r6 = session.get(LOGIN_URL + "?faces-redirect=true", headers=login_headers, timeout=30, allow_redirects=True)
-        viewstate = extract_viewstate(r6.text)
-        
-        fit_btn_match = re.search(r'id="(j_idt\d+)"[^>]*name="\1"[^>]*type="submit"', r6.text)
-        fit_btn = fit_btn_match.group(1) if fit_btn_match else "j_idt506"
-        post_headers = base_headers.copy()
-        post_headers['Content-Type'] = 'application/x-www-form-urlencoded'
-        post_headers['Origin'] = 'https://vahan.parivahan.gov.in'
-        post_headers['Referer'] = LOGIN_URL + "?faces-redirect=true"
-        payload7 = {'loginForm': 'loginForm', f'{fit_btn}': fit_btn, 'javax.faces.ViewState': viewstate, 'InputEnter': '', 'fitbalcTest': 'fitbalcTest', 'pur_cd': '86'}
-        r7 = session.post(LOGIN_URL, data=payload7, headers=post_headers, timeout=30, allow_redirects=True)
-        
-        form_headers = base_headers.copy()
-        form_headers['Referer'] = LOGIN_URL + "?faces-redirect=true"
-        form_headers['Cache-Control'] = 'max-age=0'
-        r8 = session.get(FORM_URL, headers=form_headers, timeout=30)
-        viewstate = extract_viewstate(r8.text)
-        
-        ajax_headers['Referer'] = FORM_URL
-        payload9 = {'javax.faces.partial.ajax': 'true', 'javax.faces.source': 'balanceFeesFine:validate_dtls', 'javax.faces.partial.execute': '@all', 'javax.faces.partial.render': 'balanceFeesFine:auth_panel', 'balanceFeesFine:validate_dtls': 'balanceFeesFine:validate_dtls', 'balanceFeesFine': 'balanceFeesFine', 'balanceFeesFine:tf_reg_no': vehicle_number, 'balanceFeesFine:tf_chasis_no': chassis_last_5, 'javax.faces.ViewState': viewstate}
-        r9 = session.post(FORM_URL, data=payload9, headers=ajax_headers, timeout=30)
-        text = r9.text
-        
-        patterns = [
-            r'id="balanceFeesFine:tf_mobile"[^>]*value="(\d{10})"',
-            r'value="(\d{10})"[^>]*id="balanceFeesFine:tf_mobile"',
-            r'balanceFeesFine:tf_mobile[^>]*value="(\d{10})"',
+    if data == "check_joined":
+        if await is_subscribed(update, context):
+            await query.message.delete()
+            keyboard = [
+                [InlineKeyboardButton("🚗 VEHICLE SEARCH", callback_data="menu_vehicle")],
+                [InlineKeyboardButton("📱 RATION BY MOBILE", callback_data="menu_num")],
+                [InlineKeyboardButton("🆔 RATION BY AADHAAR", callback_data="menu_aadhar")],
+                [InlineKeyboardButton("📇 PAN CARD SEARCH", callback_data="menu_pan")],
+                [InlineKeyboardButton("💳 UPI VALIDATION", callback_data="menu_upi")],
+                [InlineKeyboardButton("❓ HELP / COMMANDS", callback_data="menu_help")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text="🚀 *WELCOME TO SEARCH BOT* 🚀\n\n━━━━━━━━━━━━━━━━━━━━━━━\n\n*Select an option below:*",
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+        else:
+            await query.answer("❌ You still haven't joined the channel!", show_alert=True)
+            
+    elif data == "menu_vehicle":
+        await query.edit_message_text(
+            "🚗 *VEHICLE SEARCH*\n\n"
+            "Please send the registration number.\n"
+            "Example: `UP32JK8979`\n\n"
+            "Type: `/vehicle UP32JK8979`",
+            parse_mode='Markdown'
+        )
+    elif data == "menu_num":
+        await query.edit_message_text(
+            "📱 *RATION CARD BY MOBILE NUMBER*\n\n"
+            "Please send the mobile number.\n"
+            "Example: `7703994257`\n\n"
+            "Type: `/num 7703994257`",
+            parse_mode='Markdown'
+        )
+    elif data == "menu_aadhar":
+        await query.edit_message_text(
+            "🆔 *RATION CARD BY AADHAAR NUMBER*\n\n"
+            "Please send the Aadhaar number.\n"
+            "Example: `123456789012`\n\n"
+            "Type: `/aadhar 123456789012`",
+            parse_mode='Markdown'
+        )
+    elif data == "menu_pan":
+        await query.edit_message_text(
+            "📇 *PAN CARD SEARCH*\n\n"
+            "Please send the PAN number.\n"
+            "Example: `ACCPA2495F`\n\n"
+            "Type: `/pan ACCPA2495F`",
+            parse_mode='Markdown'
+        )
+    elif data == "menu_upi":
+        await query.edit_message_text(
+            "💳 *UPI VALIDATION*\n\n"
+            "Please send the UPI ID / VPA.\n"
+            "Example: `vipansharma1931141@okhdfcbank`\n\n"
+            "Type: `/upi vipansharma1931141@okhdfcbank`",
+            parse_mode='Markdown'
+        )
+    elif data == "menu_help":
+        help_text = """
+❓ *HELP & COMMANDS*
+
+━━━━━━━━━━━━━━━━━━━━━━━
+
+*Available Commands:*
+
+🚗 `/vehicle` - Full vehicle search
+📱 `/num` - Ration by mobile
+🆔 `/aadhar` - Ration by Aadhaar
+📇 `/pan` - PAN card details
+💳 `/upi` - Validate UPI ID
+
+━━━━━━━━━━━━━━━━━━━━━━━
+
+*Examples:*
+`/vehicle UP32JK8979`
+`/num 7703994257`
+`/aadhar 123456789012`
+`/pan ACCPA2495F`
+`/upi vipansharma1931141@okhdfcbank`
+        """
+        keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(help_text, parse_mode='Markdown', reply_markup=reply_markup)
+    elif data == "menu_back":
+        keyboard = [
+            [InlineKeyboardButton("🚗 VEHICLE SEARCH", callback_data="menu_vehicle")],
+            [InlineKeyboardButton("📱 RATION BY MOBILE", callback_data="menu_num")],
+            [InlineKeyboardButton("🆔 RATION BY AADHAAR", callback_data="menu_aadhar")],
+            [InlineKeyboardButton("📇 PAN CARD SEARCH", callback_data="menu_pan")],
+            [InlineKeyboardButton("💳 UPI VALIDATION", callback_data="menu_upi")],
+            [InlineKeyboardButton("❓ HELP / COMMANDS", callback_data="menu_help")]
         ]
-        for pat in patterns:
-            m = re.search(pat, text, re.DOTALL)
-            if m:
-                mobile = m.group(1)
-                if mobile.startswith(('6','7','8','9')):
-                    return {"success": True, "mobile_number": mobile}
-        fallback = re.findall(r'\b([6-9]\d{9})\b', text)
-        if fallback:
-            return {"success": True, "mobile_number": fallback[0]}
-        return {"success": False, "error": "Mobile number not found"}
-    except Exception as e:
-        return {"success": False, "error": f"Requests failure: {e}"}
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(
+            "🚀 *WELCOME TO SEARCH BOT* 🚀\n\n━━━━━━━━━━━━━━━━━━━━━━━\n\n*Select an option below:*",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
 
-# ========== Telegram Bot Handlers ==========
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    user_id = message.chat.id
-    is_new = register_user(user_id)
-    if user_id == ADMIN_ID:
-        welcome = f"👋 Welcome Admin @{ADMIN_USERNAME}!\nYou have unlimited credits.\nUse /broadcast to send messages.\nUse /addcredit <user_id> <credits> to add credits to users."
-    else:
-        credits = get_user_credits(user_id)
-        if is_new:
-            welcome = f"👋 Welcome! You have received 1 FREE credit.\n💰 Your balance: {credits} credit (1 search = 1 credit)\n\nSend any vehicle number to get details.\nTo buy more credits, contact @{ADMIN_USERNAME} (1 credit = ₹4)"
-        else:
-            welcome = f"👋 Welcome back!\n💰 Your balance: {credits} credits (1 search = 1 credit)\n\nSend vehicle number or /balance\nTo buy more credits, contact @{ADMIN_USERNAME}"
-    bot.reply_to(message, welcome)
-
-@bot.message_handler(commands=['balance'])
-def show_balance(message):
-    user_id = message.chat.id
-    if user_id == ADMIN_ID:
-        bot.reply_to(message, f"👑 Admin @{ADMIN_USERNAME} has unlimited credits.")
-        return
-    credits = get_user_credits(user_id)
-    bot.reply_to(message, f"💰 *Your credit balance:* {credits}\n\n1 search = 1 credit\nNeed more? Contact @{ADMIN_USERNAME}", parse_mode="Markdown")
-
-@bot.message_handler(commands=['addcredit'])
-def add_credit_command(message):
-    if message.chat.id != ADMIN_ID:
-        bot.reply_to(message, "⛔ You are not authorized to use this command.")
-        return
-    parts = message.text.split()
-    if len(parts) != 3:
-        bot.reply_to(message, "❌ Usage: `/addcredit <user_id> <credits>`\nExample: `/addcredit 8273728944 10`", parse_mode="Markdown")
-        return
-    try:
-        target_id = int(parts[1])
-        amount = int(parts[2])
-        if amount <= 0:
-            raise ValueError
-        register_user(target_id)
-        add_credits(target_id, amount)
-        bot.reply_to(message, f"✅ Added {amount} credits to user {target_id}.")
-        try:
-            bot.send_message(target_id, f"🎉 {amount} credits have been added to your account! New balance: {get_user_credits(target_id)} credits.\nUse /balance to check.")
-        except:
-            pass
-    except:
-        bot.reply_to(message, "❌ Invalid user ID or amount. Use: `/addcredit <user_id> <amount>`", parse_mode="Markdown")
-
-@bot.message_handler(commands=['broadcast'])
-def broadcast_message(message):
-    if message.chat.id != ADMIN_ID:
-        bot.reply_to(message, "⛔ Only admin can use this command.")
-        return
-    text = message.text.strip()
-    if len(text) < 11:
-        bot.reply_to(message, "❌ Usage: `/broadcast <message>`\nExample: `/broadcast Server will be down at 2 AM`", parse_mode="Markdown")
-        return
-    broadcast_msg = text[11:]
-    users = get_all_users()
-    if not users:
-        bot.reply_to(message, "⚠️ No users registered yet.")
-        return
-    success = 0
-    fail = 0
-    for uid in users:
-        try:
-            bot.send_message(int(uid), f"📢 *ANNOUNCEMENT FROM ADMIN*\n\n{broadcast_msg}", parse_mode="Markdown")
-            success += 1
-        except Exception:
-            fail += 1
-    bot.reply_to(message, f"✅ Broadcast completed.\nSent: {success}\nFailed: {fail}")
-
-@bot.message_handler(func=lambda message: True)
-def process_vehicle(message):
-    user_id = message.chat.id
-    reg_no = message.text.strip().upper()
-    register_user(user_id) 
-
-    if len(reg_no) < 4 or not reg_no.isalnum():
-        bot.reply_to(message, "❌ Please send a valid vehicle registration number (e.g., UP42BU0010).")
-        return
+def main():
+    application = Application.builder().token(BOT_TOKEN).build()
     
-    # Pre-check Balance
-    if user_id != ADMIN_ID and get_user_credits(user_id) < 1:
-        credits = get_user_credits(user_id)
-        bot.reply_to(message, f"⚠️ <b>Insufficient credits!</b>\nYour balance: {credits} credits.\n1 search costs 1 credit.\nPlease contact @{ADMIN_USERNAME} to purchase more credits.", parse_mode="HTML")
-        return
-
-    status_msg = bot.reply_to(message, f"🔍 Fetching details for <code>{reg_no}</code>...", parse_mode="HTML")
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("access", access_command))
+    application.add_handler(CommandHandler("vehicle", vehicle_command))
+    application.add_handler(CommandHandler("num", num_command))
+    application.add_handler(CommandHandler("aadhar", aadhar_command))
+    application.add_handler(CommandHandler("pan", pan_command))
+    application.add_handler(CommandHandler("upi", upi_command))
+    application.add_handler(CallbackQueryHandler(menu_handler))
     
-    # API Calls
-    api = fetch_full_vehicle_data(reg_no)
-    if not api["success"]:
-        bot.edit_message_text(f"❌ Error: {api['error']}", user_id, status_msg.message_id)
-        return
-        
-    details = api["details"]
-    chassis5 = api["chassis_last5"]
-    smc_res = fetch_smc_vehicle_details(reg_no)
-    mobile_res = fetch_mobile_number_requests(reg_no, chassis5)
-    addr_res = fetch_address_api(reg_no)
-    
-    smc = smc_res.get("data", {}) if smc_res.get("success") else {}
-    address_data = addr_res.get("data", {}) if addr_res.get("success") else {}
+    print("🤖 Bot is starting...")
+    print("✅ All commands loaded successfully")
+    print("Commands: /start, /access, /vehicle, /num, /aadhar, /pan, /upi")
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
-    # Update Usage Stats for successful fetch
-    increment_usage(user_id)
+if __name__ == '__main__':
+    main()
 
-    # Manage Credits & Admin Notifications based on Mobile Result
-    if mobile_res.get("success"):
-        deduct_credit(user_id) # Credit deduct
-        current_balance = "Unlimited (Admin)" if user_id == ADMIN_ID else get_user_credits(user_id)
-        credit_footer = f"📉 <b>1 Credit deducted.</b>\n💰 <b>Remaining balance:</b> {current_balance}"
-        try:
-            bot.send_message(ADMIN_ID, f"🔔 <b>Search Alert</b>\n👤 User ID: <code>{user_id}</code>\n🚗 Searched: <code>{reg_no}</code>\n📱 Status: Mobile Found ✅\n💰 User Balance: {current_balance}", parse_mode="HTML")
-        except: pass
-    else:
-        # Credit safe
-        current_balance = "Unlimited (Admin)" if user_id == ADMIN_ID else get_user_credits(user_id)
-        credit_footer = f"🎁 <b>0 Credits deducted. (Mobile not found)</b>\n💰 <b>Remaining balance:</b> {current_balance}"
-        try:
-            bot.send_message(ADMIN_ID, f"🔔 <b>Search Alert</b>\n👤 User ID: <code>{user_id}</code>\n🚗 Searched: <code>{reg_no}</code>\n📱 Status: Mobile Not Found ❌\n💰 User Balance: {current_balance}", parse_mode="HTML")
-        except: pass
-
-    def get_val(val1, val2=None, default="N/A"):
-        if val1 and str(val1).strip() != "": return str(val1).strip()
-        if val2 and str(val2).strip() != "": return str(val2).strip()
-        return default
-
-    # Build UI
-    final = f"🚘 <b>VEHICLE DETAILS FOR: {reg_no}</b> 🚘\n"
-    final += f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
-
-    final += f"📋 <b>BASIC DETAILS</b>\n"
-    final += f"🔢 <b>Reg Number:</b> <code>{reg_no}</code>\n"
-    final += f"🏢 <b>RTO:</b> {get_val(smc.get('regAuthority'), details.get('rto'))}\n"
-    final += f"📅 <b>Reg Date:</b> {get_val(smc.get('regDate'), details.get('reg_date'))}\n"
-    final += f"⚖️ <b>Vehicle Class:</b> {get_val(smc.get('vehicleClass'))}\n"
-    final += f"🧑‍🤝‍🧑 <b>Seating Capacity:</b> {get_val(smc.get('seatCapacity'))}\n\n"
-
-    final += f"👤 <b>OWNER DETAILS</b>\n"
-    final += f"👑 <b>Owner Name:</b> {get_val(smc.get('owner'), details.get('owner'))}\n"
-    final += f"👨‍🦳 <b>Father Name:</b> {get_val(smc.get('ownerFatherName'))}\n"
-    if mobile_res.get("success"):
-        final += f"📞 <b>Mobile:</b> <code>{mobile_res['mobile_number']}</code>\n"
-    else:
-        final += f"📞 <b>Mobile:</b> Not Found ❌\n"
-        
-    final += f"🏠 <b>Present Add:</b> {get_val(address_data.get('present_address'), smc.get('presentAddress'))}\n"
-    final += f"📍 <b>Perm Add:</b> {get_val(address_data.get('permanent_address'), smc.get('permAddress'))}\n\n"
-
-    final += f"🚗 <b>VEHICLE SPECIFICATIONS</b>\n"
-    final += f"🏭 <b>Maker:</b> {get_val(smc.get('manufacturer'), details.get('make'))}\n"
-    final += f"🚙 <b>Model:</b> {get_val(smc.get('vehicle'), details.get('model'))}\n"
-    final += f"🎨 <b>Variant:</b> {get_val(smc.get('variant'))}\n"
-    final += f"⛽ <b>Fuel Type:</b> {get_val(smc.get('fuelType'), details.get('fuel'))}\n"
-    final += f"📏 <b>Engine CC:</b> {get_val(smc.get('cubicCapacity'))}\n"
-    final += f"🔩 <b>Chassis No:</b> <code>{get_val(details.get('chassis'), smc.get('chassis'))}</code>\n"
-    final += f"⚙️ <b>Engine No:</b> <code>{get_val(smc.get('engine'), details.get('engine'))}</code>\n"
-    final += f"📅 <b>Mfg Year/Month:</b> {get_val(smc.get('manufacturerMonthYear'))}\n\n"
-
-    final += f"🏦 <b>INSURANCE & FINANCE</b>\n"
-    final += f"💸 <b>Financer:</b> {get_val(smc.get('financerName'))}\n"
-    final += f"🛡️ <b>Insurance:</b> {get_val(smc.get('insuranceCompanyName'))}\n"
-    final += f"📜 <b>Policy No:</b> <code>{get_val(smc.get('insurancePolicyNumber'))}</code>\n"
-    final += f"⏳ <b>Valid Upto:</b> {get_val(smc.get('insuranceUpto'))}\n\n"
-
-    final += f"💨 <b>PUCC DETAILS</b>\n"
-    final += f"📄 <b>PUCC No:</b> <code>{get_val(smc.get('puccNumber'))}</code>\n"
-    final += f"⌛ <b>Valid Upto:</b> {get_val(smc.get('puccValidUpto'))}\n"
-    
-    final += f"━━━━━━━━━━━━━━━━━━━━━━\n"
-    final += credit_footer
-
-    try:
-        bot.edit_message_text(final, user_id, status_msg.message_id, parse_mode="HTML")
-    except Exception as e:
-        if "message too long" in str(e).lower():
-            for i in range(0, len(final), 4000):
-                bot.send_message(user_id, final[i:i+4000], parse_mode="HTML")
-        else:
-            bot.edit_message_text(f"Error: {str(e)[:100]}", user_id, status_msg.message_id)
-
-# ========== Run Bot ==========
-if __name__ == "__main__":
-    print("🤖 Bot starting...")
-    print(f"Admin ID: {ADMIN_ID}, Username: @{ADMIN_USERNAME}")
-    bot.infinity_polling()

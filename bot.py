@@ -350,7 +350,7 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if not context.args:
-        await update.message.reply_text("❌ Please provide a mobile number!\n\nExample: `/num 8052036881`", parse_mode='Markdown')
+        await update.message.reply_text("❌ Please provide a mobile number!\n\nExample: `/num 8052036991`", parse_mode='Markdown')
         return
     
     raw_number = context.args[0].strip()

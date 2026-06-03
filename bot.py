@@ -49,7 +49,7 @@ LEAKOSINT_API = "https://leakosint-by-noneusr.vercel.app/@None_usernam3/free/pub
 AADHAR_API = "https://pentestgpt-impds-api-finalapi.onrender.com/search-aadhaar"      # new API
 SPINNY_URL = "https://api.spinny.com/v3/api/vehicle/full-pan-details/"
 UPI_API = "https://api.truebalance.cc/v2/v2/payment/validateVPA"
-SPINNY_AUTH_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgzNDM5MDY2LCJqdGkiOiIxOTUyOTJkNDdiNjE0M2M2YjExNGUyOWQwMjc1OTA1NSIsInVzZXJfaWQiOjI3ODQxMzg3fQ.uAQg937MTs_4Dz7rgGqX28xVX7liEx6jIm0-1SL2SNc"
+SPINNY_AUTH_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgzNDM5MDY2LCJqdGkiOiIxOTUyOTJkNDdiNjE0M2M2YjExNGUyOWQwMjc1OTA1NSIsInVzZXJfaWQiOjI3ODQxMzg3fQ.uAQg937MTs_4Dz7rgGXq28xVX7liEx6jIm0-1SL2SNc"
 
 # Bank names list for random selection
 BANK_NAMES = [
@@ -245,7 +245,7 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if not context.args:
-        await update.message.reply_text("❌ Please provide a mobile number!\n\nExample: `/search 8052036991` or `/search +918052036771`", parse_mode='Markdown')
+        await update.message.reply_text("❌ Please provide a mobile number!\n\nExample: `/search 8052036881` or `/search +918052036881`", parse_mode='Markdown')
         return
     
     raw_number = context.args[0].strip()
@@ -349,19 +349,25 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_subscribed(update, context):
         return
 
-    if not context.args:
-        await update.message.reply_text("❌ Please provide a mobile number!\n\nExample: `/num 8052036991`", parse_mode='Markdown')
-        return
+    # Check if user provided a custom number
+    if context.args:
+        raw_number = context.args[0].strip()
+        digits = ''.join(filter(str.isdigit, raw_number))
+        if len(digits) < 10:
+            await update.message.reply_text("❌ Please provide a valid 10-digit mobile number.\n\nExample: `/num 9876543210`", parse_mode='Markdown')
+            return
+        mobile_10 = digits[-10:]
+        mobile_with_prefix = f"+91{mobile_10}"
+        custom_msg = f"for `{mobile_with_prefix}`"
+    else:
+        # Generate random Indian mobile number (starts with 6,7,8,9)
+        first_digit = random.choice(['6', '7', '8', '9'])
+        remaining_digits = ''.join(str(random.randint(0, 9)) for _ in range(9))
+        mobile_10 = first_digit + remaining_digits
+        mobile_with_prefix = f"+91{mobile_10}"
+        custom_msg = f"random number `{mobile_with_prefix}`"
     
-    raw_number = context.args[0].strip()
-    digits = ''.join(filter(str.isdigit, raw_number))
-    if len(digits) < 10:
-        await update.message.reply_text("❌ Please provide a valid 10-digit mobile number.")
-        return
-    mobile_10 = digits[-10:]
-    mobile_with_prefix = f"+91{mobile_10}"
-    
-    msg = await update.message.reply_text(f"🔍 Fetching raw data for `{mobile_with_prefix}`...\n⏳ Please wait...", parse_mode='Markdown')
+    msg = await update.message.reply_text(f"🔍 Fetching raw data for {custom_msg}...\n⏳ Please wait...", parse_mode='Markdown')
     
     try:
         url = f"{NUM_API}?search={mobile_with_prefix}"
@@ -372,7 +378,7 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if len(raw_text) > 4000:
             raw_text = raw_text[:4000] + "\n... (response truncated)"
         
-        result_text = f"📡 *RAW API RESPONSE*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n```\n{raw_text}\n```"
+        result_text = f"📡 *RAW API RESPONSE* ({custom_msg})\n━━━━━━━━━━━━━━━━━━━━━━━\n\n```\n{raw_text}\n```"
         keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
@@ -544,7 +550,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 💡 *Commands:*
 `/search 8052036881`
 `/vehicle UP32JK8979`
-`/num 8052036881`
+`/num` (auto random) or `/num 9876543210`
 `/aadhar 212028834716`
 `/pan ACCPA2495F`
 `/upi vipansharma1931141@okhdfcbank`
@@ -593,7 +599,12 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     elif data == "menu_num":
         await query.edit_message_text(
-            "📱 *MOBILE NUMBER SEARCH (RAW)*\n\nPlease send the mobile number.\nExample: `8052036881`\n\nType: `/num 8052036881`",
+            "📱 *MOBILE NUMBER SEARCH (RAW)*\n\n"
+            "*Usage:*\n"
+            "• `/num` - Auto-generates a random Indian mobile number\n"
+            "• `/num 9876543210` - Search specific number\n\n"
+            "*Example:* `/num`\n\n"
+            "*Note:* If no number is provided, a random 10-digit number (starting with 6,7,8,9) will be used.",
             parse_mode='Markdown'
         )
     elif data == "menu_aadhar":
@@ -621,7 +632,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 🔍 `/search` - Leakosint phone number lookup (Advanced)
 🚗 `/vehicle` - Full vehicle search
-📱 `/num` - Raw API response for mobile number (+91 added)
+📱 `/num` - Raw API response (auto random or custom number)
 🆔 `/aadhar` - Raw API response for Aadhaar
 📇 `/pan` - PAN card details
 💳 `/upi` - Validate UPI ID
@@ -629,16 +640,20 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ━━━━━━━━━━━━━━━━━━━━━━━
 
 *Examples:*
-`/search 8052036881`
+`/search 8052036771`
 `/vehicle UP32JK8979`
-`/num 8052036881`
+`/num` (random number)
+`/num 9876543210` (custom number)
 `/aadhar 212028834716`
 `/pan ACCPA2495F`
 `/upi vipansharma1931141@okhdfcbank`
 
 ━━━━━━━━━━━━━━━━━━━━━━━
 
-*Note:* Use `/search` for detailed phone number information including addresses, names, and emails.
+*Note about /num command:*
+• When used without arguments, it automatically generates a random Indian mobile number
+• You can also provide a specific 10-digit number
+• The API returns raw JSON response with all available data
         """
         keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -676,6 +691,9 @@ def main():
     print("🤖 Bot is starting...")
     print("✅ All commands loaded successfully")
     print("Commands: /start, /access, /search, /vehicle, /num, /aadhar, /pan, /upi")
+    print("\n📱 /num command features:")
+    print("   - No args: Auto-generates random Indian mobile number")
+    print("   - With args: Searches the provided number")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':

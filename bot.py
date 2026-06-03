@@ -45,11 +45,10 @@ AUTHORIZED_USERS = load_auth_users()
 # API Endpoints
 SMC_URL = "https://www.smcinsurance.com/central/centralcall/CallReqWithHeader"
 NUM_API = "https://leakosint-by-noneusr.vercel.app/@None_usernam3/free/public/api"   # new base URL
-LEAKOSINT_API = "https://leakosint-by-noneusr.vercel.app/@None_usernam3/free/public/api"  # Leakosint API for mobile search
 AADHAR_API = "https://pentestgpt-impds-api-finalapi.onrender.com/search-aadhaar"      # new API
 SPINNY_URL = "https://api.spinny.com/v3/api/vehicle/full-pan-details/"
 UPI_API = "https://api.truebalance.cc/v2/v2/payment/validateVPA"
-SPINNY_AUTH_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgzNDM5MDY2LCJqdGkiOiIxOTUyOTJkNDdiNjE0M2M2YjExNGUyOWQwMjc1OTA1NSIsInVzZXJfaWQiOjI3ODQxMzg3fQ.uAQg937MTs_4Dz7rgGXq28xVX7liEx6jIm0-1SL2SNc"
+SPINNY_AUTH_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgzNDM5MDY2LCJqdGkiOiIxOTUyOTJkNDdiNjE0M2M2YjExNGUyOWQwMjc1OTA1NSIsInVzZXJfaWQiOjI3ODQxMzg3fQ.uAQg937MTs_4Dz7rgGqX28xVX7liEx6jIm0-1SL2SNc"
 
 # Bank names list for random selection
 BANK_NAMES = [
@@ -109,25 +108,6 @@ SMC_HEADERS = {
     "Content-Type": "application/json",
     "Origin": "https://www.smcinsurance.com",
     "Referer": "https://www.smcinsurance.com/motor-insurance/two-wheeler-insurance"
-}
-
-# Advanced headers for Leakosint API (from HTTP/2 request)
-LEAKOSINT_HEADERS = {
-    "Host": "leakosint-by-noneusr.vercel.app",
-    "Cache-Control": "max-age=0",
-    "Sec-Ch-Ua": '"Not-A.Brand";v="24", "Chromium";v="146"',
-    "Sec-Ch-Ua-Mobile": "?0",
-    "Sec-Ch-Ua-Platform": '"Windows"',
-    "Accept-Language": "en-US,en;q=0.9",
-    "Upgrade-Insecure-Requests": "1",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-    "Sec-Fetch-Site": "none",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-User": "?1",
-    "Sec-Fetch-Dest": "document",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Priority": "u=0, i",
 }
 
 UPI_HEADERS = {
@@ -238,70 +218,6 @@ async def access_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✅ User `{target_id}` has been approved for Private DM access.", parse_mode='Markdown')
     except ValueError:
         await update.message.reply_text("❌ Invalid User ID format. Numbers only.")
-
-async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """New command to search phone number using Leakosint API with advanced headers"""
-    if not await is_subscribed(update, context):
-        return
-
-    if not context.args:
-        await update.message.reply_text("❌ Please provide a mobile number!\n\nExample: `/search 8052036991` or `/search +918052036991`", parse_mode='Markdown')
-        return
-    
-    raw_number = context.args[0].strip()
-    digits = ''.join(filter(str.isdigit, raw_number))
-    if len(digits) < 10:
-        await update.message.reply_text("❌ Please provide a valid 10-digit mobile number.")
-        return
-    
-    mobile_10 = digits[-10:]
-    mobile_with_prefix = f"+91{mobile_10}"
-    
-    msg = await update.message.reply_text(f"🔍 Searching Leakosint for `{mobile_with_prefix}`...\n⏳ Please wait...", parse_mode='Markdown')
-    
-    try:
-        # Use the exact URL format from HTTP/2 request: search={number}
-        url = f"{LEAKOSINT_API}?search={mobile_with_prefix}"
-        
-        # Make request with advanced headers
-        response = session.get(url, headers=LEAKOSINT_HEADERS, timeout=30)
-        
-        if response.status_code == 200:
-            data = response.json()
-            
-            if data.get("status") == "success" and "data" in data:
-                results = data["data"]
-                
-                if results and len(results) > 0:
-                    # Format the response nicely
-                    result_text = f"🔍 *LEAKOSINT SEARCH RESULTS*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                    result_text += f"📱 *Mobile:* `{mobile_with_prefix}`\n"
-                    result_text += f"📊 *Status:* {data.get('status', 'N/A')}\n"
-                    result_text += f"💾 *Cached:* {'✅ Yes' if data.get('cached') else '❌ No'}\n"
-                    result_text += f"📈 *Total Results:* {len(results)}\n\n"
-                    result_text += f"📋 *DETAILS:*\n━━━━━━━━━━━━━━━━━━━━━━━\n"
-                    
-                    for idx, item in enumerate(results, 1):
-                        result_text += f"\n{idx}. `{escape_markdown(item)}`"
-                    
-                    # Truncate if too long
-                    if len(result_text) > 4000:
-                        result_text = result_text[:4000] + "\n\n... (response truncated)"
-                    
-                    keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
-                    reply_markup = InlineKeyboardMarkup(keyboard)
-                    await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
-                else:
-                    await msg.edit_text(f"❌ No results found for `{mobile_with_prefix}`")
-            else:
-                await msg.edit_text(f"❌ API returned error status or invalid data\n\n```json\n{json.dumps(data, indent=2)[:500]}\n```", parse_mode='Markdown')
-        else:
-            await msg.edit_text(f"❌ API Error\nStatus Code: {response.status_code}")
-            
-    except json.JSONDecodeError:
-        await msg.edit_text(f"❌ Invalid JSON response from API\n\nResponse preview: {response.text[:300]}")
-    except Exception as e:
-        await msg.edit_text(f"❌ Error: {escape_markdown(str(e)[:100])}")
 
 async def vehicle_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_subscribed(update, context):
@@ -522,7 +438,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     keyboard = [
-        [InlineKeyboardButton("🔍 LEAKOSINT SEARCH", callback_data="menu_search")],
         [InlineKeyboardButton("🚗 VEHICLE SEARCH", callback_data="menu_vehicle")],
         [InlineKeyboardButton("📱 RATION BY MOBILE", callback_data="menu_num")],
         [InlineKeyboardButton("🆔 RATION BY AADHAAR", callback_data="menu_aadhar")],
@@ -538,7 +453,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 *Select an option below:*
 
-🔍 *Leakosint Search* - Advanced phone number lookup
 🚗 *Vehicle Search* - Comprehensive vehicle info
 📱 *Ration (Mobile)* - Raw API response for mobile number
 🆔 *Ration (Aadhaar)* - Raw API response for Aadhaar
@@ -548,7 +462,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ━━━━━━━━━━━━━━━━━━━━━━━
 
 💡 *Commands:*
-`/search 8052036771`
 `/vehicle UP32JK8979`
 `/num` (auto random) or `/num 9876543210`
 `/aadhar 212028834716`
@@ -569,7 +482,6 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if await is_subscribed(update, context):
             await query.message.delete()
             keyboard = [
-                [InlineKeyboardButton("🔍 LEAKOSINT SEARCH", callback_data="menu_search")],
                 [InlineKeyboardButton("🚗 VEHICLE SEARCH", callback_data="menu_vehicle")],
                 [InlineKeyboardButton("📱 RATION BY MOBILE", callback_data="menu_num")],
                 [InlineKeyboardButton("🆔 RATION BY AADHAAR", callback_data="menu_aadhar")],
@@ -587,11 +499,6 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await query.answer("❌ You still haven't joined the channel!", show_alert=True)
             
-    elif data == "menu_search":
-        await query.edit_message_text(
-            "🔍 *LEAKOSINT PHONE SEARCH*\n\nPlease send the mobile number.\nExample: `8052036881` or `+918052036881`\n\nType: `/search 8052036881`\n\n*This will return comprehensive phone number data including:*\n- Mobile numbers\n- Addresses\n- Names\n- Email addresses\n- Document numbers\n\n*Advanced HTTP/2 headers are used for better results.*",
-            parse_mode='Markdown'
-        )
     elif data == "menu_vehicle":
         await query.edit_message_text(
             "🚗 *VEHICLE SEARCH*\n\nPlease send the registration number.\nExample: `UP32JK8979`\n\nType: `/vehicle UP32JK8979`",
@@ -630,7 +537,6 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 *Available Commands:*
 
-🔍 `/search` - Leakosint phone number lookup (Advanced)
 🚗 `/vehicle` - Full vehicle search
 📱 `/num` - Raw API response (auto random or custom number)
 🆔 `/aadhar` - Raw API response for Aadhaar
@@ -640,7 +546,6 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ━━━━━━━━━━━━━━━━━━━━━━━
 
 *Examples:*
-`/search 8052036771`
 `/vehicle UP32JK8979`
 `/num` (random number)
 `/num 9876543210` (custom number)
@@ -660,7 +565,6 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(help_text, parse_mode='Markdown', reply_markup=reply_markup)
     elif data == "menu_back":
         keyboard = [
-            [InlineKeyboardButton("🔍 LEAKOSINT SEARCH", callback_data="menu_search")],
             [InlineKeyboardButton("🚗 VEHICLE SEARCH", callback_data="menu_vehicle")],
             [InlineKeyboardButton("📱 RATION BY MOBILE", callback_data="menu_num")],
             [InlineKeyboardButton("🆔 RATION BY AADHAAR", callback_data="menu_aadhar")],
@@ -680,7 +584,6 @@ def main():
     
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("access", access_command))
-    application.add_handler(CommandHandler("search", search_command))  # New command
     application.add_handler(CommandHandler("vehicle", vehicle_command))
     application.add_handler(CommandHandler("num", num_command))
     application.add_handler(CommandHandler("aadhar", aadhar_command))
@@ -690,7 +593,7 @@ def main():
     
     print("🤖 Bot is starting...")
     print("✅ All commands loaded successfully")
-    print("Commands: /start, /access, /search, /vehicle, /num, /aadhar, /pan, /upi")
+    print("Commands: /start, /access, /vehicle, /num, /aadhar, /pan, /upi")
     print("\n📱 /num command features:")
     print("   - No args: Auto-generates random Indian mobile number")
     print("   - With args: Searches the provided number")

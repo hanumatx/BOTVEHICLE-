@@ -76,6 +76,33 @@ CITIES = [
     "Patna", "Ludhiana", "Agra", "Nashik", "Ranchi"
 ]
 
+# Field name mappings for better display with emojis
+FIELD_EMOJIS = {
+    "Phone": "📞",
+    "Mobile": "📞",
+    "Adres": "📍",
+    "Address": "📍",
+    "DocumentNumber": "🆔",
+    "FullName": "👤",
+    "Name": "👤",
+    "FatherName": "👨",
+    "RegistrationDate": "📅",
+    "LastActivity": "🕐",
+    "Date": "📅",
+    "Browser": "🌐",
+    "IP": "🔌",
+    "Source": "📡",
+    "Circle": "📡",
+    "Alt": "📱",
+    "ID": "🆔",
+    "Father": "👨",
+    "Email": "📧",
+    "DOB": "🎂",
+    "Gender": "⚥",
+    "PAN": "📇",
+    "Aadhaar": "🪪"
+}
+
 def generate_random_micr():
     return ''.join(str(random.randint(0, 9)) for _ in range(9))
 
@@ -165,40 +192,65 @@ def sanitize_error_message(error_msg):
     
     return error_msg
 
+def get_field_emoji(field_name):
+    """Get emoji for a field name"""
+    # Check exact match
+    if field_name in FIELD_EMOJIS:
+        return FIELD_EMOJIS[field_name]
+    
+    # Check case-insensitive match
+    for key, emoji in FIELD_EMOJIS.items():
+        if key.lower() == field_name.lower():
+            return emoji
+    
+    # Check if field name contains any keyword
+    field_lower = field_name.lower()
+    for key, emoji in FIELD_EMOJIS.items():
+        if key.lower() in field_lower or field_lower in key.lower():
+            return emoji
+    
+    # Default emoji
+    return "📌"
+
 def format_leak_data(data, query_type, display_query):
-    """Format leak data without titles/descriptions"""
-    result_text = f"📡 *LEAK DATA* ({query_type}: `{display_query}`)\n━━━━━━━━━━━━━━━━━━━━━━━\n"
+    """Format leak data with emojis and without titles/descriptions"""
+    result_text = f"🔥 *{query_type} INFO RESULT*\n"
+    result_text += f"📱 {query_type}: `{display_query}`\n"
+    result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
     
     if not data.get('status', False):
-        result_text += "\n❌ No data found or API error."
+        result_text += "❌ No data found or API error."
         return result_text
     
     leak_data = data.get('data', {})
     if not leak_data:
-        result_text += "\n❌ No leak data available."
+        result_text += "❌ No leak data available."
         return result_text
     
     # Process each source
+    result_counter = 1
     for source_key, source_data in leak_data.items():
         records = source_data.get('records', [])
         if not records:
             continue
-            
-        # Add source header (without title)
-        result_text += f"\n📂 *{source_key.upper()}*"
-        result_text += "\n" + "─" * 30 + "\n"
         
-        # Process each record
+        # Process each record in this source
         for idx, record in enumerate(records):
-            if idx > 0:
-                result_text += "\n" + "•" * 20 + "\n"
+            if result_counter > 1:
+                result_text += "\n" + "─" * 30 + "\n\n"
             
+            # Add result number header
+            result_text += f"*Result {result_counter}*\n"
+            result_counter += 1
+            
+            # Show each field with emoji
             for key, value in record.items():
                 if value:
-                    result_text += f"├ *{key}:* `{escape_markdown(str(value))}`\n"
+                    emoji = get_field_emoji(key)
+                    result_text += f"{emoji} *{key}:* `{escape_markdown(str(value))}`\n"
     
-    if result_text == f"📡 *LEAK DATA* ({query_type}: `{display_query}`)\n━━━━━━━━━━━━━━━━━━━━━━━\n":
-        result_text += "\n❌ No records found in the response."
+    if result_counter == 1:
+        result_text += "❌ No records found in the response."
     
     return result_text
 
@@ -344,7 +396,7 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Take last 10 digits
         mobile_10 = digits[-10:]
         search_query = f"+91{mobile_10}"
-        display_query = f"+91{mobile_10}"
+        display_query = f"{mobile_10}"
     else:
         await update.message.reply_text(
             "❌ Invalid mobile number! Please provide a valid 10-digit mobile number.\n\n"
@@ -368,7 +420,7 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if response.status_code == 200:
             data = response.json()
-            result_text = format_leak_data(data, "Mobile", display_query)
+            result_text = format_leak_data(data, "Number", display_query)
             
             # Truncate if too long
             if len(result_text) > 4000:
@@ -629,8 +681,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "*Usage:*\n"
             "`/num 9669785385`\n"
             "`/num +919669785385`\n\n"
-            "*Note:* You can use with or without +91 prefix.\n\n"
-            "The API returns raw JSON data from multiple sources including HiTeckGroop, 1Win, and TrueCaller leaks.",
+            "*Note:* You can use with or without +91 prefix.",
             parse_mode='Markdown'
         )
     elif data == "menu_aadhar":
@@ -639,8 +690,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Search leaks by Aadhaar number.\n\n"
             "*Usage:*\n"
             "`/aadhar 212028834716`\n\n"
-            "*Note:* Aadhaar must be exactly 12 digits.\n\n"
-            "The API returns raw JSON data from multiple sources including HiTeckGroop, 1Win, and TrueCaller leaks.",
+            "*Note:* Aadhaar must be exactly 12 digits.",
             parse_mode='Markdown'
         )
     elif data == "menu_pan":
@@ -681,8 +731,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *About Leak Search:*
 • `/num` - Search by 10-digit mobile number
 • `/aadhar` - Search by 12-digit Aadhaar number
-• Returns raw JSON from multiple leak sources
-• Sources: HiTeckGroop, 1Win, TrueCaller India
+• Returns formatted data with emojis
         """
         keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -721,7 +770,7 @@ def main():
     print("\n📊 Leak search commands:")
     print("   - Search by mobile number: /num 9669785385")
     print("   - Search by Aadhaar: /aadhar 212028834716")
-    print("   - Returns formatted leak data without titles/descriptions")
+    print("   - Returns formatted data with emojis")
     print("   - API keys and tokens are hidden from users")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 

@@ -44,9 +44,8 @@ AUTHORIZED_USERS = load_auth_users()
 
 # API Endpoints
 SMC_URL = "https://www.smcinsurance.com/central/centralcall/CallReqWithHeader"
-# NEW API - Replaces both num and aadhar APIs
 LEAK_API = "https://sexy-leak-api.noobgamingv40.workers.dev/api"
-LEAK_API_KEY = "hackerzz"  # This will be hidden from users
+LEAK_API_KEY = "hackerzz"
 SPINNY_URL = "https://api.spinny.com/v3/api/vehicle/full-pan-details/"
 UPI_API = "https://api.truebalance.cc/v2/v2/payment/validateVPA"
 SPINNY_AUTH_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgzNDM5MDY2LCJqdGkiOiIxOTUyOTJkNDdiNjE0M2M2YjExNGUyOWQwMjc1OTA1NSIsInVzZXJfaWQiOjI3ODQxMzg3fQ.uAQg937MTs_4Dz7rgGqX28xVX7liEx6jIm0-1SL2SNc"
@@ -150,17 +149,12 @@ def escape_markdown(text):
 
 def sanitize_error_message(error_msg):
     """Remove sensitive information from error messages"""
-    # Remove API key if present
     if LEAK_API_KEY in error_msg:
         error_msg = error_msg.replace(LEAK_API_KEY, "[HIDDEN]")
     
-    # Remove any URLs with sensitive params
     import re
-    # Hide apikey parameter in URLs
     error_msg = re.sub(r'apikey=[^&\s]+', 'apikey=[HIDDEN]', error_msg)
-    # Hide token parameters
     error_msg = re.sub(r'token=[^&\s]+', 'token=[HIDDEN]', error_msg)
-    # Hide authorization headers
     error_msg = re.sub(r'Authorization: Bearer [^\s]+', 'Authorization: Bearer [HIDDEN]', error_msg)
     
     return error_msg
@@ -269,8 +263,7 @@ async def vehicle_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
                 reply_markup = InlineKeyboardMarkup(keyboard)
-                if len(result_text) > 4000:
-                    result_text = result_text[:4000] + "...\n(Message Truncated)"
+                # No truncation for vehicle data
                 await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
             else:
                 await msg.edit_text(f"❌ No vehicle data found for `{registration_number}`")
@@ -281,7 +274,7 @@ async def vehicle_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.edit_text(f"❌ Error: {escape_markdown(error_msg[:100])}")
 
 async def search_leak_api(search_query, query_type, display_query):
-    """Helper function to search the leak API"""
+    """Helper function to search the leak API - returns only raw records without titles/descriptions"""
     try:
         params = {
             "q": search_query,
@@ -290,20 +283,43 @@ async def search_leak_api(search_query, query_type, display_query):
         response = session.get(LEAK_API, params=params, timeout=90)
         raw_text = response.text
         
-        # Try to parse and format JSON
+        # Try to parse JSON and extract only records
         try:
             data = response.json()
-            formatted_json = json.dumps(data, indent=2, ensure_ascii=False)
-            if len(formatted_json) > 4000:
-                formatted_json = formatted_json[:4000] + "\n... (response truncated)"
-            result_text = f"📡 *LEAK API RESPONSE* ({query_type}: `{display_query}`)\n━━━━━━━━━━━━━━━━━━━━━━━\n\n```json\n{formatted_json}\n```"
+            
+            # Extract only records from all sources
+            if data.get('status') and data.get('data'):
+                all_records = []
+                for source_key, source_data in data['data'].items():
+                    if isinstance(source_data, dict) and 'records' in source_data:
+                        records = source_data['records']
+                        if records:
+                            # Add source name to each record for identification
+                            for record in records:
+                                # Add source identifier without title/description
+                                record['_source'] = source_key
+                                all_records.append(record)
+                
+                if all_records:
+                    # Return only the records as JSON (no truncation)
+                    result_json = json.dumps(all_records, indent=2, ensure_ascii=False)
+                    result_text = f"📡 *LEAK DATA* ({query_type}: `{display_query}`)\n━━━━━━━━━━━━━━━━━━━━━━━\n\n```json\n{result_json}\n```"
+                else:
+                    # If no records found, return the full response
+                    formatted_json = json.dumps(data, indent=2, ensure_ascii=False)
+                    result_text = f"📡 *LEAK API RESPONSE* ({query_type}: `{display_query}`)\n━━━━━━━━━━━━━━━━━━━━━━━\n\n```json\n{formatted_json}\n```"
+            else:
+                # If data structure is different, return formatted JSON
+                formatted_json = json.dumps(data, indent=2, ensure_ascii=False)
+                result_text = f"📡 *LEAK API RESPONSE* ({query_type}: `{display_query}`)\n━━━━━━━━━━━━━━━━━━━━━━━\n\n```json\n{formatted_json}\n```"
+            
+            return result_text, None
+            
         except:
-            # If not JSON, show raw text
-            if len(raw_text) > 4000:
-                raw_text = raw_text[:4000] + "\n... (response truncated)"
+            # If not JSON, show raw text (no truncation)
             result_text = f"📡 *LEAK API RESPONSE* ({query_type}: `{display_query}`)\n━━━━━━━━━━━━━━━━━━━━━━━\n\n```\n{raw_text}\n```"
-        
-        return result_text, None
+            return result_text, None
+            
     except Exception as e:
         error_msg = sanitize_error_message(str(e))
         return None, error_msg
@@ -313,7 +329,6 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_subscribed(update, context):
         return
 
-    # Check if user provided a custom number
     if context.args:
         raw_number = context.args[0].strip()
         digits = ''.join(filter(str.isdigit, raw_number))
@@ -325,7 +340,6 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         display_query = mobile_with_prefix
         custom_msg = f"for `{mobile_with_prefix}`"
     else:
-        # Generate random Indian mobile number (starts with 6,7,8,9)
         first_digit = random.choice(['6', '7', '8', '9'])
         remaining_digits = ''.join(str(random.randint(0, 9)) for _ in range(9))
         mobile_10 = first_digit + remaining_digits
@@ -632,8 +646,8 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("access", access_command))
     application.add_handler(CommandHandler("vehicle", vehicle_command))
-    application.add_handler(CommandHandler("num", num_command))  # Restored
-    application.add_handler(CommandHandler("aadhar", aadhar_command))  # Restored
+    application.add_handler(CommandHandler("num", num_command))
+    application.add_handler(CommandHandler("aadhar", aadhar_command))
     application.add_handler(CommandHandler("pan", pan_command))
     application.add_handler(CommandHandler("upi", upi_command))
     application.add_handler(CallbackQueryHandler(menu_handler))
@@ -644,10 +658,10 @@ def main():
     print("\n📱 /num command features:")
     print("   - No args: Auto-generates random Indian mobile number")
     print("   - With args: Searches the provided number")
-    print("   - Uses new leak API with hidden credentials")
+    print("   - Shows ONLY raw records without titles/descriptions")
     print("\n🆔 /aadhar command features:")
     print("   - Searches by 12-digit Aadhaar number")
-    print("   - Uses new leak API with hidden credentials")
+    print("   - Shows ONLY raw records without titles/descriptions")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':

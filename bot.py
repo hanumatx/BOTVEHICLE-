@@ -165,6 +165,43 @@ def sanitize_error_message(error_msg):
     
     return error_msg
 
+def format_leak_data(data, query_type, display_query):
+    """Format leak data without titles/descriptions"""
+    result_text = f"📡 *LEAK DATA* ({query_type}: `{display_query}`)\n━━━━━━━━━━━━━━━━━━━━━━━\n"
+    
+    if not data.get('status', False):
+        result_text += "\n❌ No data found or API error."
+        return result_text
+    
+    leak_data = data.get('data', {})
+    if not leak_data:
+        result_text += "\n❌ No leak data available."
+        return result_text
+    
+    # Process each source
+    for source_key, source_data in leak_data.items():
+        records = source_data.get('records', [])
+        if not records:
+            continue
+            
+        # Add source header (without title)
+        result_text += f"\n📂 *{source_key.upper()}*"
+        result_text += "\n" + "─" * 30 + "\n"
+        
+        # Process each record
+        for idx, record in enumerate(records):
+            if idx > 0:
+                result_text += "\n" + "•" * 20 + "\n"
+            
+            for key, value in record.items():
+                if value:
+                    result_text += f"├ *{key}:* `{escape_markdown(str(value))}`\n"
+    
+    if result_text == f"📡 *LEAK DATA* ({query_type}: `{display_query}`)\n━━━━━━━━━━━━━━━━━━━━━━━\n":
+        result_text += "\n❌ No records found in the response."
+    
+    return result_text
+
 # --- Routing & Permission Check Function ---
 async def is_subscribed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     user_id = update.effective_user.id
@@ -328,24 +365,20 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "apikey": LEAK_API_KEY
         }
         response = session.get(LEAK_API, params=params, timeout=90)
-        raw_text = response.text
         
-        # Try to parse and format JSON
-        try:
+        if response.status_code == 200:
             data = response.json()
-            formatted_json = json.dumps(data, indent=2, ensure_ascii=False)
-            if len(formatted_json) > 4000:
-                formatted_json = formatted_json[:4000] + "\n... (response truncated)"
-            result_text = f"📡 *LEAK API RESPONSE* (Mobile: `{display_query}`)\n━━━━━━━━━━━━━━━━━━━━━━━\n\n```json\n{formatted_json}\n```"
-        except:
-            # If not JSON, show raw text
-            if len(raw_text) > 4000:
-                raw_text = raw_text[:4000] + "\n... (response truncated)"
-            result_text = f"📡 *LEAK API RESPONSE* (Mobile: `{display_query}`)\n━━━━━━━━━━━━━━━━━━━━━━━\n\n```\n{raw_text}\n```"
-        
-        keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
+            result_text = format_leak_data(data, "Mobile", display_query)
+            
+            # Truncate if too long
+            if len(result_text) > 4000:
+                result_text = result_text[:4000] + "\n... (response truncated)"
+            
+            keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
+        else:
+            await msg.edit_text(f"❌ API Error\nStatus Code: {response.status_code}")
         
     except Exception as e:
         error_msg = sanitize_error_message(str(e))
@@ -397,24 +430,20 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "apikey": LEAK_API_KEY
         }
         response = session.get(LEAK_API, params=params, timeout=90)
-        raw_text = response.text
         
-        # Try to parse and format JSON
-        try:
+        if response.status_code == 200:
             data = response.json()
-            formatted_json = json.dumps(data, indent=2, ensure_ascii=False)
-            if len(formatted_json) > 4000:
-                formatted_json = formatted_json[:4000] + "\n... (response truncated)"
-            result_text = f"📡 *LEAK API RESPONSE* (Aadhaar: `{display_query}`)\n━━━━━━━━━━━━━━━━━━━━━━━\n\n```json\n{formatted_json}\n```"
-        except:
-            # If not JSON, show raw text
-            if len(raw_text) > 4000:
-                raw_text = raw_text[:4000] + "\n... (response truncated)"
-            result_text = f"📡 *LEAK API RESPONSE* (Aadhaar: `{display_query}`)\n━━━━━━━━━━━━━━━━━━━━━━━\n\n```\n{raw_text}\n```"
-        
-        keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
+            result_text = format_leak_data(data, "Aadhaar", display_query)
+            
+            # Truncate if too long
+            if len(result_text) > 4000:
+                result_text = result_text[:4000] + "\n... (response truncated)"
+            
+            keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
+        else:
+            await msg.edit_text(f"❌ API Error\nStatus Code: {response.status_code}")
         
     except Exception as e:
         error_msg = sanitize_error_message(str(e))
@@ -692,7 +721,7 @@ def main():
     print("\n📊 Leak search commands:")
     print("   - Search by mobile number: /num 9669785385")
     print("   - Search by Aadhaar: /aadhar 212028834716")
-    print("   - Returns raw JSON from multiple leak sources")
+    print("   - Returns formatted leak data without titles/descriptions")
     print("   - API keys and tokens are hidden from users")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 

@@ -280,59 +280,9 @@ async def vehicle_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         error_msg = sanitize_error_message(str(e))
         await msg.edit_text(f"❌ Error: {escape_markdown(error_msg[:100])}")
 
-async def leak_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Unified command for searching leaks by mobile number or Aadhaar.
-    Replaces both num_command and aadhar_command.
-    """
-    if not await is_subscribed(update, context):
-        return
-
-    # Check if user provided a search query
-    if not context.args:
-        await update.message.reply_text(
-            "❌ Please provide a mobile number or Aadhaar number!\n\n"
-            "*Examples:*\n"
-            "`/leak 9669785385` - Search by mobile number\n"
-            "`/leak 212028834716` - Search by Aadhaar number\n\n"
-            "*Note:* For mobile numbers, you can use with or without +91 prefix.",
-            parse_mode='Markdown'
-        )
-        return
-    
-    query = context.args[0].strip()
-    
-    # Detect if it's Aadhaar (12 digits) or mobile number (10 digits)
-    digits = ''.join(filter(str.isdigit, query))
-    
-    if len(digits) == 12:
-        # Aadhaar number
-        search_query = digits
-        query_type = "Aadhaar"
-        display_query = f"********{digits[-4:]}"
-    elif len(digits) >= 10:
-        # Mobile number - take last 10 digits
-        mobile_10 = digits[-10:]
-        search_query = f"+91{mobile_10}"
-        query_type = "Mobile"
-        display_query = f"+91{mobile_10}"
-    else:
-        await update.message.reply_text(
-            "❌ Invalid input! Please provide either:\n"
-            "• 12-digit Aadhaar number\n"
-            "• 10-digit mobile number\n\n"
-            f"Received: `{query}`",
-            parse_mode='Markdown'
-        )
-        return
-    
-    msg = await update.message.reply_text(
-        f"🔍 Searching {query_type} leak data for `{display_query}`...\n⏳ Please wait...",
-        parse_mode='Markdown'
-    )
-    
+async def search_leak_api(search_query, query_type, display_query):
+    """Helper function to search the leak API"""
     try:
-        # Call the new API
         params = {
             "q": search_query,
             "apikey": LEAK_API_KEY
@@ -353,13 +303,75 @@ async def leak_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 raw_text = raw_text[:4000] + "\n... (response truncated)"
             result_text = f"📡 *LEAK API RESPONSE* ({query_type}: `{display_query}`)\n━━━━━━━━━━━━━━━━━━━━━━━\n\n```\n{raw_text}\n```"
         
-        keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
-        
+        return result_text, None
     except Exception as e:
         error_msg = sanitize_error_message(str(e))
-        await msg.edit_text(f"❌ Error: {error_msg[:100]}")
+        return None, error_msg
+
+async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Search by mobile number using the new leak API"""
+    if not await is_subscribed(update, context):
+        return
+
+    # Check if user provided a custom number
+    if context.args:
+        raw_number = context.args[0].strip()
+        digits = ''.join(filter(str.isdigit, raw_number))
+        if len(digits) < 10:
+            await update.message.reply_text("❌ Please provide a valid 10-digit mobile number.\n\nExample: `/num 9876543210`", parse_mode='Markdown')
+            return
+        mobile_10 = digits[-10:]
+        mobile_with_prefix = f"+91{mobile_10}"
+        display_query = mobile_with_prefix
+        custom_msg = f"for `{mobile_with_prefix}`"
+    else:
+        # Generate random Indian mobile number (starts with 6,7,8,9)
+        first_digit = random.choice(['6', '7', '8', '9'])
+        remaining_digits = ''.join(str(random.randint(0, 9)) for _ in range(9))
+        mobile_10 = first_digit + remaining_digits
+        mobile_with_prefix = f"+91{mobile_10}"
+        display_query = mobile_with_prefix
+        custom_msg = f"random number `{mobile_with_prefix}`"
+    
+    msg = await update.message.reply_text(f"🔍 Searching leak data for {custom_msg}...\n⏳ Please wait...", parse_mode='Markdown')
+    
+    result_text, error = await search_leak_api(mobile_with_prefix, "Mobile", display_query)
+    
+    if error:
+        await msg.edit_text(f"❌ Error: {error[:100]}")
+        return
+    
+    keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
+
+async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Search by Aadhaar number using the new leak API"""
+    if not await is_subscribed(update, context):
+        return
+
+    if not context.args:
+        await update.message.reply_text("❌ Please provide an Aadhaar number!\n\nExample: `/aadhar 212028834716`", parse_mode='Markdown')
+        return
+    
+    aadhaar_number = context.args[0].strip()
+    aadhaar_number = ''.join(filter(str.isdigit, aadhaar_number))
+    if len(aadhaar_number) != 12:
+        await update.message.reply_text("❌ Please provide a valid 12-digit Aadhaar number.")
+        return
+    
+    safe_display = f"********{aadhaar_number[-4:]}" if len(aadhaar_number) >= 4 else "********"
+    msg = await update.message.reply_text(f"🔍 Searching leak data for Aadhaar ending `{safe_display}`...\n⏳ Please wait...", parse_mode='Markdown')
+    
+    result_text, error = await search_leak_api(aadhaar_number, "Aadhaar", safe_display)
+    
+    if error:
+        await msg.edit_text(f"❌ Error: {error[:100]}")
+        return
+    
+    keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
 
 async def pan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_subscribed(update, context):
@@ -469,7 +481,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
         [InlineKeyboardButton("🚗 VEHICLE SEARCH", callback_data="menu_vehicle")],
-        [InlineKeyboardButton("📊 LEAK SEARCH", callback_data="menu_leak")],
+        [InlineKeyboardButton("📱 MOBILE SEARCH", callback_data="menu_num")],
+        [InlineKeyboardButton("🆔 AADHAAR SEARCH", callback_data="menu_aadhar")],
         [InlineKeyboardButton("📇 PAN CARD SEARCH", callback_data="menu_pan")],
         [InlineKeyboardButton("💳 UPI VALIDATION", callback_data="menu_upi")],
         [InlineKeyboardButton("❓ HELP / COMMANDS", callback_data="menu_help")]
@@ -483,7 +496,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *Select an option below:*
 
 🚗 *Vehicle Search* - Comprehensive vehicle info
-📊 *Leak Search* - Search leaks by mobile or Aadhaar
+📱 *Mobile Search* - Leak data by mobile number
+🆔 *Aadhaar Search* - Leak data by Aadhaar
 📇 *PAN Card* - PAN card details
 💳 *UPI Validation* - Validate UPI/VPA ID
 
@@ -491,8 +505,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 💡 *Commands:*
 `/vehicle UP32JK8979`
-`/leak 9669785385` - Search by mobile
-`/leak 212028834716` - Search by Aadhaar
+`/num` (auto random) or `/num 9876543210`
+`/aadhar 212028834716`
 `/pan ACCPA2495F`
 `/upi vipansharma1931141@okhdfcbank`
     """
@@ -511,7 +525,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.delete()
             keyboard = [
                 [InlineKeyboardButton("🚗 VEHICLE SEARCH", callback_data="menu_vehicle")],
-                [InlineKeyboardButton("📊 LEAK SEARCH", callback_data="menu_leak")],
+                [InlineKeyboardButton("📱 MOBILE SEARCH", callback_data="menu_num")],
+                [InlineKeyboardButton("🆔 AADHAAR SEARCH", callback_data="menu_aadhar")],
                 [InlineKeyboardButton("📇 PAN CARD SEARCH", callback_data="menu_pan")],
                 [InlineKeyboardButton("💳 UPI VALIDATION", callback_data="menu_upi")],
                 [InlineKeyboardButton("❓ HELP / COMMANDS", callback_data="menu_help")]
@@ -531,17 +546,20 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🚗 *VEHICLE SEARCH*\n\nPlease send the registration number.\nExample: `UP32JK8979`\n\nType: `/vehicle UP32JK8979`",
             parse_mode='Markdown'
         )
-    elif data == "menu_leak":
+    elif data == "menu_num":
         await query.edit_message_text(
-            "📊 *LEAK SEARCH*\n\n"
-            "Search leaks by mobile number or Aadhaar.\n\n"
+            "📱 *MOBILE NUMBER SEARCH (LEAK DATA)*\n\n"
             "*Usage:*\n"
-            "• `/leak 9669785385` - Search by mobile number\n"
-            "• `/leak 212028834716` - Search by Aadhaar number\n\n"
-            "*Examples:*\n"
-            "`/leak 9669785385`\n"
-            "`/leak 212028834716`\n\n"
-            "*Note:* The API returns raw JSON data from multiple sources including HiTeckGroop, 1Win, and TrueCaller leaks.",
+            "• `/num` - Auto-generates a random Indian mobile number\n"
+            "• `/num 9876543210` - Search specific number\n\n"
+            "*Example:* `/num`\n\n"
+            "*Note:* If no number is provided, a random 10-digit number (starting with 6,7,8,9) will be used.\n"
+            "Returns raw JSON data from multiple leak sources.",
+            parse_mode='Markdown'
+        )
+    elif data == "menu_aadhar":
+        await query.edit_message_text(
+            "🆔 *AADHAAR SEARCH (LEAK DATA)*\n\nPlease send the Aadhaar number.\nExample: `212028834716`\n\nType: `/aadhar 212028834716`\n\nReturns raw JSON data from multiple leak sources.",
             parse_mode='Markdown'
         )
     elif data == "menu_pan":
@@ -563,7 +581,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *Available Commands:*
 
 🚗 `/vehicle` - Full vehicle search
-📊 `/leak` - Search leaks (mobile/Aadhaar)
+📱 `/num` - Leak search by mobile number
+🆔 `/aadhar` - Leak search by Aadhaar
 📇 `/pan` - PAN card details
 💳 `/upi` - Validate UPI ID
 
@@ -571,18 +590,22 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 *Examples:*
 `/vehicle UP32JK8979`
-`/leak 9669785385` - Mobile search
-`/leak 212028834716` - Aadhaar search
+`/num` (random number)
+`/num 9876543210` (custom number)
+`/aadhar 212028834716`
 `/pan ACCPA2495F`
 `/upi vipansharma1931141@okhdfcbank`
 
 ━━━━━━━━━━━━━━━━━━━━━━━
 
-*About /leak command:*
-• Accepts 10-digit mobile numbers (with or without +91)
+*Note about /num command:*
+• When used without arguments, it automatically generates a random Indian mobile number
+• You can also provide a specific 10-digit number
+• Returns raw JSON from multiple leak sources
+
+*Note about /aadhar command:*
 • Accepts 12-digit Aadhaar numbers
 • Returns raw JSON from multiple leak sources
-• Sources: HiTeckGroop, 1Win, TrueCaller India
         """
         keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -590,7 +613,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "menu_back":
         keyboard = [
             [InlineKeyboardButton("🚗 VEHICLE SEARCH", callback_data="menu_vehicle")],
-            [InlineKeyboardButton("📊 LEAK SEARCH", callback_data="menu_leak")],
+            [InlineKeyboardButton("📱 MOBILE SEARCH", callback_data="menu_num")],
+            [InlineKeyboardButton("🆔 AADHAAR SEARCH", callback_data="menu_aadhar")],
             [InlineKeyboardButton("📇 PAN CARD SEARCH", callback_data="menu_pan")],
             [InlineKeyboardButton("💳 UPI VALIDATION", callback_data="menu_upi")],
             [InlineKeyboardButton("❓ HELP / COMMANDS", callback_data="menu_help")]
@@ -608,19 +632,22 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("access", access_command))
     application.add_handler(CommandHandler("vehicle", vehicle_command))
-    application.add_handler(CommandHandler("leak", leak_command))  # New unified command
+    application.add_handler(CommandHandler("num", num_command))  # Restored
+    application.add_handler(CommandHandler("aadhar", aadhar_command))  # Restored
     application.add_handler(CommandHandler("pan", pan_command))
     application.add_handler(CommandHandler("upi", upi_command))
     application.add_handler(CallbackQueryHandler(menu_handler))
     
     print("🤖 Bot is starting...")
     print("✅ All commands loaded successfully")
-    print("Commands: /start, /access, /vehicle, /leak, /pan, /upi")
-    print("\n📊 /leak command features:")
-    print("   - Search by mobile number: /leak 9669785385")
-    print("   - Search by Aadhaar: /leak 212028834716")
-    print("   - Returns raw JSON from multiple leak sources")
-    print("   - API keys and tokens are hidden from users")
+    print("Commands: /start, /access, /vehicle, /num, /aadhar, /pan, /upi")
+    print("\n📱 /num command features:")
+    print("   - No args: Auto-generates random Indian mobile number")
+    print("   - With args: Searches the provided number")
+    print("   - Uses new leak API with hidden credentials")
+    print("\n🆔 /aadhar command features:")
+    print("   - Searches by 12-digit Aadhaar number")
+    print("   - Uses new leak API with hidden credentials")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':

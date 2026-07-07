@@ -47,7 +47,10 @@ AUTHORIZED_USERS = load_auth_users()
 SMC_URL = "https://www.smcinsurance.com/central/centralcall/CallReqWithHeader"
 # New API for mobile number lookup
 NUM_API = "https://encorexproxy.vercel.app/p/danger-num"
-# Old leak API for Aadhaar
+# New API for Aadhaar number lookup
+AADHAR_API = "https://api.paanel.shop/api/gateway.php"
+AADHAR_API_KEY = "Seeker"  # The key parameter for the Aadhaar API
+# Old leak API (kept for reference, but no longer used for Aadhaar)
 LEAK_API = "https://sexy-leak-api.noobgamingv40.workers.dev/api"
 LEAK_API_KEY = "hackerzz"
 SPINNY_URL = "https://api.spinny.com/v3/api/vehicle/full-pan-details/"
@@ -168,6 +171,8 @@ def sanitize_error_message(error_msg):
     # Remove API keys
     if LEAK_API_KEY in error_msg:
         error_msg = error_msg.replace(LEAK_API_KEY, "[HIDDEN]")
+    if AADHAR_API_KEY in error_msg:
+        error_msg = error_msg.replace(AADHAR_API_KEY, "[HIDDEN]")
     
     # Remove API URLs
     api_patterns = [
@@ -175,7 +180,8 @@ def sanitize_error_message(error_msg):
         r'https://sexy-leak-api\.noobgamingv40\.workers\.dev[^\s]*',
         r'https://api\.spinny\.com[^\s]*',
         r'https://api\.truebalance\.cc[^\s]*',
-        r'https://www\.smcinsurance\.com[^\s]*'
+        r'https://www\.smcinsurance\.com[^\s]*',
+        r'https://api\.paanel\.shop[^\s]*'
     ]
     for pattern in api_patterns:
         error_msg = re.sub(pattern, '[API_ENDPOINT]', error_msg)
@@ -248,41 +254,58 @@ def format_num_data(data, display_query):
     
     return result_text
 
-def format_aadhar_data(data, query_type, display_query):
-    """Format Aadhaar leak data with emojis"""
-    result_text = f"🔥 *{query_type} Info Result*\n"
-    result_text += f"🪪 {query_type}: `{display_query}`\n"
+def format_aadhar_data(data, display_query):
+    """Format Aadhaar data from the new API with emojis"""
+    result_text = f"🔥 *Aadhaar Info Result*\n"
+    result_text += f"🪪 Aadhaar: `{display_query}`\n"
     result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
     
-    if not data.get('status', False):
+    if not data or not isinstance(data, list):
         result_text += "❌ No information found for this Aadhaar number."
         return result_text
     
-    leak_data = data.get('data', {})
-    if not leak_data:
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_data = []
+    for item in data:
+        # Create a unique key based on all fields except data_id
+        item_copy = {k: v for k, v in item.items() if k != 'data_id'}
+        item_key = json.dumps(item_copy, sort_keys=True)
+        if item_key not in seen:
+            seen.add(item_key)
+            unique_data.append(item)
+    
+    if not unique_data:
         result_text += "❌ No information found for this Aadhaar number."
         return result_text
     
-    result_counter = 1
-    for source_key, source_data in leak_data.items():
-        records = source_data.get('records', [])
-        if not records:
-            continue
+    # Show each unique result
+    for idx, record in enumerate(unique_data, 1):
+        if idx > 1:
+            result_text += "\n" + "─" * 30 + "\n\n"
         
-        for idx, record in enumerate(records):
-            if result_counter > 1:
-                result_text += "\n" + "─" * 30 + "\n\n"
-            
-            result_text += f"*Result {result_counter}*\n"
-            result_counter += 1
-            
-            for key, value in record.items():
-                if value:
-                    emoji = get_field_emoji(key)
-                    result_text += f"{emoji} *{key}:* `{escape_markdown(str(value))}`\n"
-    
-    if result_counter == 1:
-        result_text += "❌ No information found for this Aadhaar number."
+        result_text += f"*Result {idx}*\n"
+        
+        # Generate random SIM ID (11 digits)
+        sim_id = ''.join(str(random.randint(0, 9)) for _ in range(11))
+        
+        # Define field order for better readability
+        field_order = ["NAME", "fname", "MOBILE", "alt", "ADDRESS", "circle", "email", "id"]
+        
+        # First show fields in preferred order
+        for field in field_order:
+            if field in record and record[field]:
+                emoji = get_field_emoji(field)
+                result_text += f"{emoji} *{field}:* `{escape_markdown(str(record[field]))}`\n"
+        
+        # Add SIM ID at the end
+        result_text += f"📱 *SIM ID:* `{sim_id}`\n"
+        
+        # Show any remaining fields (excluding data_id)
+        for key, value in record.items():
+            if key not in field_order and key != 'data_id' and value:
+                emoji = get_field_emoji(key)
+                result_text += f"{emoji} *{key}:* `{escape_markdown(str(value))}`\n"
     
     return result_text
 
@@ -467,7 +490,7 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Command for searching leaks by Aadhaar number.
+    Command for searching Aadhaar details using the new API.
     """
     if not await is_subscribed(update, context):
         return
@@ -476,7 +499,7 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "❌ Please provide an Aadhaar number!\n\n"
             "*Examples:*\n"
-            "`/aadhar 212028834716`\n\n"
+            "`/aadhar 416401876424`\n\n"
             "*Note:* Aadhaar must be exactly 12 digits.",
             parse_mode='Markdown'
         )
@@ -489,7 +512,7 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if len(digits) == 12:
         # Valid Aadhaar number
-        search_query = digits
+        aadhaar_number = digits
         display_query = f"********{digits[-4:]}"
     else:
         await update.message.reply_text(
@@ -500,21 +523,21 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     msg = await update.message.reply_text(
-        f"🔍 Searching leak data for Aadhaar `{display_query}`...\n⏳ Please wait...",
+        f"🔍 Searching details for Aadhaar `{display_query}`...\n⏳ Please wait...",
         parse_mode='Markdown'
     )
     
     try:
-        # Call the API with Aadhaar number
+        # Call the new Aadhaar API
         params = {
-            "q": search_query,
-            "apikey": LEAK_API_KEY
+            "key": AADHAR_API_KEY,
+            "aadhar": aadhaar_number
         }
-        response = session.get(LEAK_API, params=params, timeout=90)
+        response = session.get(AADHAR_API, params=params, timeout=90)
         
         if response.status_code == 200:
             data = response.json()
-            result_text = format_aadhar_data(data, "Aadhaar", display_query)
+            result_text = format_aadhar_data(data, display_query)
             
             # Truncate if too long
             if len(result_text) > 4000:
@@ -524,7 +547,7 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup = InlineKeyboardMarkup(keyboard)
             await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
         else:
-            await msg.edit_text(f"❌ Failed to fetch Aadhaar data. Please try again later.")
+            await msg.edit_text(f"❌ Failed to fetch Aadhaar details. Please try again later.")
         
     except Exception as e:
         error_msg = sanitize_error_message(str(e))
@@ -639,7 +662,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("🚗 VEHICLE SEARCH", callback_data="menu_vehicle")],
         [InlineKeyboardButton("📱 MOBILE SEARCH", callback_data="menu_num")],
-        [InlineKeyboardButton("🪪 AADHAAR LEAK SEARCH", callback_data="menu_aadhar")],
+        [InlineKeyboardButton("🪪 AADHAAR SEARCH", callback_data="menu_aadhar")],
         [InlineKeyboardButton("📇 PAN CARD SEARCH", callback_data="menu_pan")],
         [InlineKeyboardButton("💳 UPI VALIDATION", callback_data="menu_upi")],
         [InlineKeyboardButton("❓ HELP / COMMANDS", callback_data="menu_help")]
@@ -654,7 +677,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 🚗 *Vehicle Search* - Comprehensive vehicle info
 📱 *Mobile Search* - Mobile number details
-🪪 *Aadhaar Leak* - Search leaks by Aadhaar
+🪪 *Aadhaar Search* - Aadhaar number details
 📇 *PAN Card* - PAN card details
 💳 *UPI Validation* - Validate UPI/VPA ID
 
@@ -663,7 +686,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 💡 *Commands:*
 `/vehicle UP32JK8979`
 `/num 7701803770` - Mobile details
-`/aadhar 212028834716` - Aadhaar leak
+`/aadhar 416401876424` - Aadhaar details
 `/pan ACCPA2495F`
 `/upi vipansharma1931141@okhdfcbank`
     """
@@ -683,7 +706,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             keyboard = [
                 [InlineKeyboardButton("🚗 VEHICLE SEARCH", callback_data="menu_vehicle")],
                 [InlineKeyboardButton("📱 MOBILE SEARCH", callback_data="menu_num")],
-                [InlineKeyboardButton("🪪 AADHAAR LEAK SEARCH", callback_data="menu_aadhar")],
+                [InlineKeyboardButton("🪪 AADHAAR SEARCH", callback_data="menu_aadhar")],
                 [InlineKeyboardButton("📇 PAN CARD SEARCH", callback_data="menu_pan")],
                 [InlineKeyboardButton("💳 UPI VALIDATION", callback_data="menu_upi")],
                 [InlineKeyboardButton("❓ HELP / COMMANDS", callback_data="menu_help")]
@@ -723,11 +746,21 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     elif data == "menu_aadhar":
         await query.edit_message_text(
-            "🪪 *AADHAAR LEAK SEARCH*\n\n"
-            "Search leaks by Aadhaar number.\n\n"
+            "🪪 *AADHAAR SEARCH*\n\n"
+            "Search details by Aadhaar number.\n\n"
             "*Usage:*\n"
-            "`/aadhar 212028834716`\n\n"
-            "*Note:* Aadhaar must be exactly 12 digits.",
+            "`/aadhar 416401876424`\n\n"
+            "*Note:* Aadhaar must be exactly 12 digits.\n\n"
+            "*Returns:*\n"
+            "👤 Full Name\n"
+            "🏢 Name\n"
+            "📞 Mobile Number\n"
+            "📱 Alternative Number\n"
+            "📍 Address\n"
+            "📡 Circle/Operator\n"
+            "📧 Email\n"
+            "🆔 Aadhaar ID\n"
+            "📱 SIM ID (Random)",
             parse_mode='Markdown'
         )
     elif data == "menu_pan":
@@ -750,7 +783,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 🚗 `/vehicle` - Full vehicle search
 📱 `/num` - Mobile number details
-🪪 `/aadhar` - Aadhaar leak search
+🪪 `/aadhar` - Aadhaar number details
 📇 `/pan` - PAN card details
 💳 `/upi` - Validate UPI ID
 
@@ -759,11 +792,17 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *Examples:*
 `/vehicle UP32JK8979`
 `/num 7701803770` - Mobile details
-`/aadhar 212028834716` - Aadhaar leak
+`/aadhar 416401876424` - Aadhaar details
 `/pan ACCPA2495F`
 `/upi vipansharma1931141@okhdfcbank`
 
 ━━━━━━━━━━━━━━━━━━━━━━━
+
+*About Aadhaar Search:*
+• `/aadhar` - Search by 12-digit Aadhaar number
+• Returns: Name, Address, Mobile, Alternative Number, Circle/Operator, Email, ID
+• Random SIM ID generated for each result
+• Duplicate results are automatically removed
 
 *About Mobile Search:*
 • `/num` - Search by 10-digit mobile number
@@ -777,7 +816,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [
             [InlineKeyboardButton("🚗 VEHICLE SEARCH", callback_data="menu_vehicle")],
             [InlineKeyboardButton("📱 MOBILE SEARCH", callback_data="menu_num")],
-            [InlineKeyboardButton("🪪 AADHAAR LEAK SEARCH", callback_data="menu_aadhar")],
+            [InlineKeyboardButton("🪪 AADHAAR SEARCH", callback_data="menu_aadhar")],
             [InlineKeyboardButton("📇 PAN CARD SEARCH", callback_data="menu_pan")],
             [InlineKeyboardButton("💳 UPI VALIDATION", callback_data="menu_upi")],
             [InlineKeyboardButton("❓ HELP / COMMANDS", callback_data="menu_help")]
@@ -796,7 +835,7 @@ def main():
     application.add_handler(CommandHandler("access", access_command))
     application.add_handler(CommandHandler("vehicle", vehicle_command))
     application.add_handler(CommandHandler("num", num_command))  # Mobile search with new API
-    application.add_handler(CommandHandler("aadhar", aadhar_command))  # Aadhaar leak search
+    application.add_handler(CommandHandler("aadhar", aadhar_command))  # Aadhaar search with new API
     application.add_handler(CommandHandler("pan", pan_command))
     application.add_handler(CommandHandler("upi", upi_command))
     application.add_handler(CallbackQueryHandler(menu_handler))
@@ -809,7 +848,12 @@ def main():
     print("   - Returns formatted data with emojis")
     print("   - Duplicate results automatically removed")
     print("\n🪪 Aadhaar Search:")
-    print("   - Usage: /aadhar 212028834716")
+    print("   - New API: https://api.paanel.shop/api/gateway.php")
+    print("   - Usage: /aadhar 416401876424")
+    print("   - Returns formatted data with emojis")
+    print("   - data_id removed from output")
+    print("   - Random SIM ID added to each result")
+    print("   - Duplicate results automatically removed")
     print("\n🔒 All API endpoints and keys are hidden from users")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 

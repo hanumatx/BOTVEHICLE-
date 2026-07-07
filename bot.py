@@ -4,6 +4,7 @@ import logging
 import random
 import string
 import asyncio
+import re
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 from requests.adapters import HTTPAdapter
@@ -164,12 +165,26 @@ def escape_markdown(text):
 
 def sanitize_error_message(error_msg):
     """Remove sensitive information from error messages"""
+    # Remove API keys
     if LEAK_API_KEY in error_msg:
         error_msg = error_msg.replace(LEAK_API_KEY, "[HIDDEN]")
     
-    import re
+    # Remove API URLs
+    api_patterns = [
+        r'https://encorexproxy\.vercel\.app[^\s]*',
+        r'https://sexy-leak-api\.noobgamingv40\.workers\.dev[^\s]*',
+        r'https://api\.spinny\.com[^\s]*',
+        r'https://api\.truebalance\.cc[^\s]*',
+        r'https://www\.smcinsurance\.com[^\s]*'
+    ]
+    for pattern in api_patterns:
+        error_msg = re.sub(pattern, '[API_ENDPOINT]', error_msg)
+    
+    # Hide apikey parameter in URLs
     error_msg = re.sub(r'apikey=[^&\s]+', 'apikey=[HIDDEN]', error_msg)
+    # Hide token parameters
     error_msg = re.sub(r'token=[^&\s]+', 'token=[HIDDEN]', error_msg)
+    # Hide authorization headers
     error_msg = re.sub(r'Authorization: Bearer [^\s]+', 'Authorization: Bearer [HIDDEN]', error_msg)
     
     return error_msg
@@ -192,7 +207,7 @@ def format_num_data(data, display_query):
     result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
     
     if not data or not isinstance(data, list):
-        result_text += "❌ No data found for this number."
+        result_text += "❌ No information found for this number."
         return result_text
     
     # Remove duplicates while preserving order
@@ -206,7 +221,7 @@ def format_num_data(data, display_query):
             unique_data.append(item)
     
     if not unique_data:
-        result_text += "❌ No valid data found."
+        result_text += "❌ No information found for this number."
         return result_text
     
     # Show each unique result
@@ -240,12 +255,12 @@ def format_aadhar_data(data, query_type, display_query):
     result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
     
     if not data.get('status', False):
-        result_text += "❌ No data found or API error."
+        result_text += "❌ No information found for this Aadhaar number."
         return result_text
     
     leak_data = data.get('data', {})
     if not leak_data:
-        result_text += "❌ No leak data available."
+        result_text += "❌ No information found for this Aadhaar number."
         return result_text
     
     result_counter = 1
@@ -267,7 +282,7 @@ def format_aadhar_data(data, query_type, display_query):
                     result_text += f"{emoji} *{key}:* `{escape_markdown(str(value))}`\n"
     
     if result_counter == 1:
-        result_text += "❌ No records found in the response."
+        result_text += "❌ No information found for this Aadhaar number."
     
     return result_text
 
@@ -381,10 +396,11 @@ async def vehicle_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await msg.edit_text(f"❌ No vehicle data found for `{registration_number}`")
         else:
-            await msg.edit_text(f"❌ API Error\nStatus Code: {response.status_code}")
+            error_msg = sanitize_error_message(str(response.status_code))
+            await msg.edit_text(f"❌ Failed to fetch vehicle data. Please try again later.")
     except Exception as e:
         error_msg = sanitize_error_message(str(e))
-        await msg.edit_text(f"❌ Error: {escape_markdown(error_msg[:100])}")
+        await msg.edit_text(f"❌ An error occurred while fetching data. Please try again later.")
 
 async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -443,11 +459,11 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup = InlineKeyboardMarkup(keyboard)
             await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
         else:
-            await msg.edit_text(f"❌ API Error\nStatus Code: {response.status_code}")
+            await msg.edit_text(f"❌ Failed to fetch number details. Please try again later.")
         
     except Exception as e:
         error_msg = sanitize_error_message(str(e))
-        await msg.edit_text(f"❌ Error: {error_msg[:100]}")
+        await msg.edit_text(f"❌ An error occurred while fetching data. Please try again later.")
 
 async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -508,11 +524,11 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup = InlineKeyboardMarkup(keyboard)
             await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
         else:
-            await msg.edit_text(f"❌ API Error\nStatus Code: {response.status_code}")
+            await msg.edit_text(f"❌ Failed to fetch Aadhaar data. Please try again later.")
         
     except Exception as e:
         error_msg = sanitize_error_message(str(e))
-        await msg.edit_text(f"❌ Error: {error_msg[:100]}")
+        await msg.edit_text(f"❌ An error occurred while fetching data. Please try again later.")
 
 async def pan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_subscribed(update, context):
@@ -560,10 +576,10 @@ async def pan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await msg.edit_text(f"❌ No data found for PAN `{pan_number}`")
         else:
-            await msg.edit_text(f"❌ API Error: {response.status_code}")
+            await msg.edit_text(f"❌ Failed to fetch PAN details. Please try again later.")
     except Exception as e:
         error_msg = sanitize_error_message(str(e))
-        await msg.edit_text(f"❌ Error: {error_msg[:100]}")
+        await msg.edit_text(f"❌ An error occurred while fetching data. Please try again later.")
 
 async def upi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_subscribed(update, context):
@@ -614,7 +630,7 @@ async def upi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
     except Exception as e:
         error_msg = sanitize_error_message(str(e))
-        await msg.edit_text(f"❌ Error: {error_msg[:100]}")
+        await msg.edit_text(f"❌ An error occurred while validating UPI. Please try again later.")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_subscribed(update, context):
@@ -789,13 +805,12 @@ def main():
     print("✅ All commands loaded successfully")
     print("Commands: /start, /access, /vehicle, /num, /aadhar, /pan, /upi")
     print("\n📱 Mobile Search:")
-    print("   - New API: https://encorexproxy.vercel.app/p/danger-num")
     print("   - Usage: /num 7701803770")
     print("   - Returns formatted data with emojis")
     print("   - Duplicate results automatically removed")
     print("\n🪪 Aadhaar Search:")
-    print("   - Uses leak API")
     print("   - Usage: /aadhar 212028834716")
+    print("\n🔒 All API endpoints and keys are hidden from users")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':

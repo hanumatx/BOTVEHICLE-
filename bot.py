@@ -44,15 +44,13 @@ AUTHORIZED_USERS = load_auth_users()
 # -------------------------
 
 # API Endpoints
-SMC_URL = "https://www.smcinsurance.com/central/centralcall/CallReqWithHeader"
+# New API for vehicle details
+VEHICLE_API = "https://vehicelix.vercel.app/api/vehicle-details"
 # New API for mobile number lookup
 NUM_API = "https://encorexproxy.vercel.app/p/danger-num"
 # New API for Aadhaar number lookup
 AADHAR_API = "https://api.paanel.shop/api/gateway.php"
 AADHAR_API_KEY = "Seeker"  # The key parameter for the Aadhaar API
-# Old leak API (kept for reference, but no longer used for Aadhaar)
-LEAK_API = "https://sexy-leak-api.noobgamingv40.workers.dev/api"
-LEAK_API_KEY = "hackerzz"
 SPINNY_URL = "https://api.spinny.com/v3/api/vehicle/full-pan-details/"
 UPI_API = "https://api.truebalance.cc/v2/v2/payment/validateVPA"
 SPINNY_AUTH_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgzNDM5MDY2LCJqdGkiOiIxOTUyOTJkNDdiNjE0M2M2YjExNGUyOWQwMjc1OTA1NSIsInVzZXJfaWQiOjI3ODQxMzg3fQ.uAQg937MTs_4Dz7rgGqX28xVX7liEx6jIm0-1SL2SNc"
@@ -120,15 +118,6 @@ def generate_random_email(name=""):
     return f"user{random.randint(1000, 9999)}@{random.choice(domains)}"
 
 # API Headers
-SMC_HEADERS = {
-    "Host": "www.smcinsurance.com",
-    "Sec-Ch-Ua-Platform": "Android",
-    "User-Agent": "Mozilla/5.0 (Linux; Android 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.7204.179 Mobile Safari/537.36",
-    "Content-Type": "application/json",
-    "Origin": "https://www.smcinsurance.com",
-    "Referer": "https://www.smcinsurance.com/motor-insurance/two-wheeler-insurance"
-}
-
 UPI_HEADERS = {
     "Host": "api.truebalance.cc",
     "accept": "application/json",
@@ -169,19 +158,16 @@ def escape_markdown(text):
 def sanitize_error_message(error_msg):
     """Remove sensitive information from error messages"""
     # Remove API keys
-    if LEAK_API_KEY in error_msg:
-        error_msg = error_msg.replace(LEAK_API_KEY, "[HIDDEN]")
     if AADHAR_API_KEY in error_msg:
         error_msg = error_msg.replace(AADHAR_API_KEY, "[HIDDEN]")
     
     # Remove API URLs
     api_patterns = [
         r'https://encorexproxy\.vercel\.app[^\s]*',
-        r'https://sexy-leak-api\.noobgamingv40\.workers\.dev[^\s]*',
         r'https://api\.spinny\.com[^\s]*',
         r'https://api\.truebalance\.cc[^\s]*',
-        r'https://www\.smcinsurance\.com[^\s]*',
-        r'https://api\.paanel\.shop[^\s]*'
+        r'https://api\.paanel\.shop[^\s]*',
+        r'https://vehicelix\.vercel\.app[^\s]*'
     ]
     for pattern in api_patterns:
         error_msg = re.sub(pattern, '[API_ENDPOINT]', error_msg)
@@ -205,6 +191,90 @@ def get_field_emoji(field_name):
             return emoji
     
     return "📌"
+
+def format_vehicle_data(data, registration_number):
+    """Format vehicle data from the new API with emojis and sections."""
+    result_text = f"🚗 *VEHICLE DETAILS*\n"
+    result_text += f"🔢 *Number:* `{registration_number}`\n"
+    result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+
+    if not data or not data.get('success', False):
+        result_text += "❌ No vehicle data found or an error occurred."
+        return result_text
+
+    # Use the 'formatted' section for clean data
+    vehicle_info = data.get('formatted', {})
+    if not vehicle_info:
+        result_text += "❌ No vehicle data available in the response."
+        return result_text
+
+    # --- Registration & Status ---
+    reg = vehicle_info.get('registration', {})
+    if reg:
+        result_text += f"📋 *REGISTRATION & STATUS*\n"
+        result_text += f"├ Status: {'✅ Active' if reg.get('status') == 'ACTIVE' else '❌ ' + reg.get('status', 'N/A')}\n"
+        result_text += f"├ Class: `{escape_markdown(reg.get('class', 'N/A'))}`\n"
+        result_text += f"├ Reg. Date: `{escape_markdown(reg.get('date', 'N/A'))}`\n"
+        result_text += f"└ Mfg. Year: `{escape_markdown(reg.get('manufacturing_year', 'N/A'))}`\n\n"
+
+    # --- Vehicle Specifications ---
+    veh = vehicle_info.get('vehicle', {})
+    if veh:
+        result_text += f"⚙️ *VEHICLE SPECIFICATIONS*\n"
+        result_text += f"├ Manufacturer: `{escape_markdown(veh.get('manufacturer', 'N/A'))}`\n"
+        result_text += f"├ Model: `{escape_markdown(veh.get('model', 'N/A'))}`\n"
+        result_text += f"├ Variant: `{escape_markdown(veh.get('variant', 'N/A'))}`\n"
+        result_text += f"├ Fuel Type: `{escape_markdown(veh.get('fuel_type', 'N/A'))}`\n"
+        result_text += f"├ Color: `{escape_markdown(veh.get('color', 'N/A'))}`\n"
+        result_text += f"├ Body Type: `{escape_markdown(veh.get('body_type', 'N/A'))}`\n"
+        result_text += f"├ Category: `{escape_markdown(veh.get('category', 'N/A'))}`\n"
+        result_text += f"├ Seat Capacity: `{escape_markdown(veh.get('seat_capacity', 'N/A'))}`\n"
+        result_text += f"├ Cubic Capacity: `{escape_markdown(veh.get('cubic_capacity', 'N/A'))}` CC\n"
+        result_text += f"├ Weight: `{escape_markdown(veh.get('weight', 'N/A'))}` KG\n"
+        result_text += f"├ Chassis: `{escape_markdown(veh.get('chassis_number', 'N/A'))}`\n"
+        result_text += f"├ Engine: `{escape_markdown(veh.get('engine_number', 'N/A'))}`\n"
+        result_text += f"└ Commercial: {'✅ Yes' if veh.get('is_commercial') else '❌ No'}\n\n"
+
+    # --- Owner Information ---
+    owner = vehicle_info.get('owner', {})
+    if owner:
+        result_text += f"👤 *OWNER INFORMATION*\n"
+        result_text += f"├ Name: `{escape_markdown(owner.get('name', 'N/A'))}`\n"
+        result_text += f"└ Owner Count: `{escape_markdown(owner.get('count', 'N/A'))}`\n\n"
+
+    # --- Financial & Insurance ---
+    fin = vehicle_info.get('financial', {})
+    ins = vehicle_info.get('insurance', {})
+    if fin or ins:
+        result_text += f"💰 *FINANCIAL & INSURANCE*\n"
+        if fin:
+            result_text += f"├ Financer: `{escape_markdown(fin.get('financer', 'N/A'))}`\n"
+            result_text += f"├ Hypothecation: {'✅ Yes' if fin.get('is_hypothecated') else '❌ No'}\n"
+        if ins:
+            result_text += f"├ Insurance Co.: `{escape_markdown(ins.get('company', 'N/A'))}`\n"
+            result_text += f"├ Policy No.: `{escape_markdown(ins.get('policy_number', 'N/A'))}`\n"
+            result_text += f"├ Valid Till: `{escape_markdown(ins.get('valid_till', 'N/A'))}`\n"
+            result_text += f"└ Status: `{escape_markdown(ins.get('status', 'N/A'))}`\n\n"
+
+    # --- Address ---
+    addr = vehicle_info.get('address', {})
+    if addr and (addr.get('line1') or addr.get('line2') or addr.get('pincode')):
+        result_text += f"📍 *ADDRESS*\n"
+        if addr.get('line1'):
+            result_text += f"├ Line 1: `{escape_markdown(addr.get('line1'))}`\n"
+        if addr.get('line2'):
+            result_text += f"├ Line 2: `{escape_markdown(addr.get('line2'))}`\n"
+        result_text += f"└ Pincode: `{escape_markdown(addr.get('pincode', 'N/A'))}`\n\n"
+
+    # --- Vendor Details ---
+    vendor = vehicle_info.get('vendor', {})
+    if vendor:
+        result_text += f"🏭 *VENDOR DETAILS*\n"
+        result_text += f"├ Manufacturer: `{escape_markdown(vendor.get('manufacturer', 'N/A'))}`\n"
+        result_text += f"├ Model: `{escape_markdown(vendor.get('model', 'N/A'))}`\n"
+        result_text += f"└ Variant ID: `{escape_markdown(vendor.get('variant_id', 'N/A'))}`\n"
+
+    return result_text
 
 def format_num_data(data, display_query):
     """Format mobile number data with emojis"""
@@ -386,41 +456,31 @@ async def vehicle_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
         
     if not context.args:
-        await update.message.reply_text("❌ Please provide a registration number!\n\nExample: `/vehicle UP42AL8182`", parse_mode='Markdown')
+        await update.message.reply_text("❌ Please provide a registration number!\n\nExample: `/vehicle KA31A1324`", parse_mode='Markdown')
         return
     
-    registration_number = context.args[0].upper()
-    msg = await update.message.reply_text(f"🔍 Fetching all details for `{registration_number}`...\n⏳ Please wait...", parse_mode='Markdown')
+    registration_number = context.args[0].upper().strip()
+    msg = await update.message.reply_text(f"🔍 Fetching details for vehicle `{registration_number}`...\n⏳ Please wait...", parse_mode='Markdown')
     
     try:
-        payload = {"URL": "GetVaahanDetailsByVehicleNo", "Props": [registration_number], "Token": ""}
-        response = session.post(SMC_URL, headers=SMC_HEADERS, json=payload, timeout=60, verify=False)
+        # Call the new API
+        params = {"vehicleNumber": registration_number}
+        response = session.get(VEHICLE_API, params=params, timeout=60)
         
         if response.status_code == 200:
             data = response.json()
-            if "response" in data and data["response"]:
-                vehicle_info = data["response"]
-                result_text = "🚗 *ALL VEHICLE DATA*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                for key, value in vehicle_info.items():
-                    if isinstance(value, dict):
-                        result_text += f"\n🏦 *{key.upper()}*\n"
-                        for sub_key, sub_value in value.items():
-                            if sub_value == "" or sub_value is None: sub_value = "N/A"
-                            result_text += f"├ *{sub_key}:* `{escape_markdown(sub_value)}`\n"
-                    else:
-                        if value == "" or value is None: value = "N/A"
-                        result_text += f"*{key}:* `{escape_markdown(value)}`\n"
-                
-                keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                if len(result_text) > 4000:
-                    result_text = result_text[:4000] + "...\n(Message Truncated)"
-                await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
-            else:
-                await msg.edit_text(f"❌ No vehicle data found for `{registration_number}`")
+            result_text = format_vehicle_data(data, registration_number)
+            
+            # Truncate if too long
+            if len(result_text) > 4000:
+                result_text = result_text[:4000] + "\n... (response truncated)"
+            
+            keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
         else:
-            error_msg = sanitize_error_message(str(response.status_code))
-            await msg.edit_text(f"❌ Failed to fetch vehicle data. Please try again later.")
+            await msg.edit_text(f"❌ Failed to fetch vehicle details. Please try again later.")
+        
     except Exception as e:
         error_msg = sanitize_error_message(str(e))
         await msg.edit_text(f"❌ An error occurred while fetching data. Please try again later.")
@@ -684,7 +744,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ━━━━━━━━━━━━━━━━━━━━━━━
 
 💡 *Commands:*
-`/vehicle UP32JK8979`
+`/vehicle KA31A1324`
 `/num 7701803770` - Mobile details
 `/aadhar 416401876424` - Aadhaar details
 `/pan ACCPA2495F`
@@ -723,7 +783,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
     elif data == "menu_vehicle":
         await query.edit_message_text(
-            "🚗 *VEHICLE SEARCH*\n\nPlease send the registration number.\nExample: `UP32JK8979`\n\nType: `/vehicle UP32JK8979`",
+            "🚗 *VEHICLE SEARCH*\n\nPlease send the registration number.\nExample: `KA31A1324`\n\nType: `/vehicle KA31A1324`",
             parse_mode='Markdown'
         )
     elif data == "menu_num":
@@ -790,13 +850,17 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ━━━━━━━━━━━━━━━━━━━━━━━
 
 *Examples:*
-`/vehicle UP32JK8979`
+`/vehicle KA31A1324`
 `/num 7701803770` - Mobile details
 `/aadhar 416401876424` - Aadhaar details
 `/pan ACCPA2495F`
 `/upi vipansharma1931141@okhdfcbank`
 
 ━━━━━━━━━━━━━━━━━━━━━━━
+
+*About Vehicle Search:*
+• `/vehicle` - Search by registration number
+• Returns: Registration Status, Vehicle Specs, Owner Info, Insurance, Address, Vendor Details
 
 *About Aadhaar Search:*
 • `/aadhar` - Search by 12-digit Aadhaar number
@@ -834,8 +898,8 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("access", access_command))
     application.add_handler(CommandHandler("vehicle", vehicle_command))
-    application.add_handler(CommandHandler("num", num_command))  # Mobile search with new API
-    application.add_handler(CommandHandler("aadhar", aadhar_command))  # Aadhaar search with new API
+    application.add_handler(CommandHandler("num", num_command))
+    application.add_handler(CommandHandler("aadhar", aadhar_command))
     application.add_handler(CommandHandler("pan", pan_command))
     application.add_handler(CommandHandler("upi", upi_command))
     application.add_handler(CallbackQueryHandler(menu_handler))
@@ -843,6 +907,10 @@ def main():
     print("🤖 Bot is starting...")
     print("✅ All commands loaded successfully")
     print("Commands: /start, /access, /vehicle, /num, /aadhar, /pan, /upi")
+    print("\n🚗 Vehicle Search:")
+    print("   - New API: https://vehicelix.vercel.app/api/vehicle-details")
+    print("   - Usage: /vehicle KA31A1324")
+    print("   - Returns comprehensive vehicle details with emojis")
     print("\n📱 Mobile Search:")
     print("   - Usage: /num 7701803770")
     print("   - Returns formatted data with emojis")

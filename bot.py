@@ -47,7 +47,7 @@ AUTHORIZED_USERS = load_auth_users()
 # New API for vehicle details
 VEHICLE_API = "https://vehicelix.vercel.app/api/vehicle-details"
 # New API for mobile number lookup
-NUM_API = "https://encorexproxy.vercel.app/p/danger-num"
+NUM_API = "https://api.paanel.shop/api/gateway.php"
 # New API for Aadhaar number lookup
 AADHAR_API = "https://api.paanel.shop/api/gateway.php"
 AADHAR_API_KEY = "Seeker"  # The key parameter for the Aadhaar API
@@ -89,7 +89,9 @@ FIELD_EMOJIS = {
     "circle": "📡",
     "email": "📧",
     "fname": "👤",
-    "id": "🆔"
+    "id": "🆔",
+    "icic": "🏦",
+    "msid": "📱"
 }
 
 def generate_random_micr():
@@ -116,6 +118,14 @@ def generate_random_email(name=""):
         name = name.lower().replace(" ", "")
         return f"{name}{random.randint(1, 999)}@{random.choice(domains)}"
     return f"user{random.randint(1000, 9999)}@{random.choice(domains)}"
+
+# Generate random ICIC code (alphanumeric, 11 characters)
+def generate_random_icic():
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=11))
+
+# Generate random MSID (numeric, 15 digits)
+def generate_random_msid():
+    return ''.join(str(random.randint(0, 9)) for _ in range(15))
 
 # API Headers
 UPI_HEADERS = {
@@ -277,7 +287,7 @@ def format_vehicle_data(data, registration_number):
     return result_text
 
 def format_num_data(data, display_query):
-    """Format mobile number data with emojis"""
+    """Format mobile number data with emojis - uses new API format"""
     result_text = f"🔥 *Number Info Result*\n"
     result_text += f"📱 Number: `{display_query}`\n"
     result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -286,14 +296,18 @@ def format_num_data(data, display_query):
         result_text += "❌ No information found for this number."
         return result_text
     
-    # Remove duplicates while preserving order
+    # Remove duplicates while preserving order (based on data_id, but we'll remove data_id)
     seen = set()
     unique_data = []
     for item in data:
-        # Create a unique key based on all fields
-        item_key = json.dumps(item, sort_keys=True)
+        # Create a copy without data_id for comparison
+        item_copy = {k: v for k, v in item.items() if k != 'data_id'}
+        item_key = json.dumps(item_copy, sort_keys=True)
         if item_key not in seen:
             seen.add(item_key)
+            # Remove data_id from the final data
+            if 'data_id' in item:
+                del item['data_id']
             unique_data.append(item)
     
     if not unique_data:
@@ -307,8 +321,12 @@ def format_num_data(data, display_query):
         
         result_text += f"*Result {idx}*\n"
         
-        # Show fields in a specific order for better readability
-        field_order = ["NAME", "fname", "MOBILE", "alt", "ADDRESS", "circle", "email", "id"]
+        # Add random ICIC and MSID for each record
+        record['icic'] = generate_random_icic()
+        record['msid'] = generate_random_msid()
+        
+        # Define field order for better readability
+        field_order = ["NAME", "fname", "MOBILE", "alt", "ADDRESS", "circle", "email", "id", "icic", "msid"]
         
         # First show fields in preferred order
         for field in field_order:
@@ -316,9 +334,9 @@ def format_num_data(data, display_query):
                 emoji = get_field_emoji(field)
                 result_text += f"{emoji} *{field}:* `{escape_markdown(str(record[field]))}`\n"
         
-        # Then show any remaining fields
+        # Show any remaining fields (data_id should have been removed)
         for key, value in record.items():
-            if key not in field_order and value:
+            if key not in field_order and value and key != 'data_id':
                 emoji = get_field_emoji(key)
                 result_text += f"{emoji} *{key}:* `{escape_markdown(str(value))}`\n"
     
@@ -343,6 +361,9 @@ def format_aadhar_data(data, display_query):
         item_key = json.dumps(item_copy, sort_keys=True)
         if item_key not in seen:
             seen.add(item_key)
+            # Remove data_id from the final data
+            if 'data_id' in item:
+                del item['data_id']
             unique_data.append(item)
     
     if not unique_data:
@@ -526,12 +547,16 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     try:
-        # Call the new API
-        params = {"num": mobile}
+        # Call the new API with the number parameter
+        params = {
+            "key": AADHAR_API_KEY,
+            "number": mobile
+        }
         response = session.get(NUM_API, params=params, timeout=90)
         
         if response.status_code == 200:
             data = response.json()
+            # The new API returns data directly as an array
             result_text = format_num_data(data, display_query)
             
             # Truncate if too long
@@ -801,7 +826,9 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "📱 Alternative Number\n"
             "📡 Circle/Operator\n"
             "📧 Email\n"
-            "🆔 ID Number",
+            "🆔 ID Number\n"
+            "🏦 ICIC (Random)\n"
+            "📱 MSID (Random)",
             parse_mode='Markdown'
         )
     elif data == "menu_aadhar":
@@ -871,6 +898,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *About Mobile Search:*
 • `/num` - Search by 10-digit mobile number
 • Returns: Name, Address, Alternative Number, Circle/Operator, Email, ID
+• Random ICIC and MSID added to each result
 • Duplicate results are automatically removed
         """
         keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
@@ -912,9 +940,12 @@ def main():
     print("   - Usage: /vehicle KA31A1324")
     print("   - Returns comprehensive vehicle details with emojis")
     print("\n📱 Mobile Search:")
+    print("   - New API: https://api.paanel.shop/api/gateway.php?key=Seeker&number=XXXXXXXXXX")
     print("   - Usage: /num 7701803770")
     print("   - Returns formatted data with emojis")
     print("   - Duplicate results automatically removed")
+    print("   - data_id field removed from output")
+    print("   - Random ICIC and MSID added to each result")
     print("\n🪪 Aadhaar Search:")
     print("   - New API: https://api.paanel.shop/api/gateway.php")
     print("   - Usage: /aadhar 416401876424")

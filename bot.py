@@ -44,8 +44,8 @@ AUTHORIZED_USERS = load_auth_users()
 # -------------------------
 
 # API Endpoints
-# New API for vehicle details
-VEHICLE_API = "https://vehicelix.vercel.app/api/vehicle-details"
+# Updated Vehicle API
+VEHICLE_API = "https://chuchirandiki.vercel.app/api/vehicle"
 # New API for mobile number lookup
 NUM_API = "https://api.paanel.shop/api/gateway.php"
 # New API for Aadhaar number lookup
@@ -173,7 +173,7 @@ def sanitize_error_message(error_msg):
     
     # Remove API URLs
     api_patterns = [
-        r'https://encorexproxy\.vercel\.app[^\s]*',
+        r'https://chuchirandiki\.vercel\.app[^\s]*',
         r'https://api\.spinny\.com[^\s]*',
         r'https://api\.truebalance\.cc[^\s]*',
         r'https://api\.paanel\.shop[^\s]*',
@@ -212,77 +212,57 @@ def format_vehicle_data(data, registration_number):
         result_text += "❌ No vehicle data found or an error occurred."
         return result_text
 
-    # Use the 'formatted' section for clean data
-    vehicle_info = data.get('formatted', {})
+    # Get the data section
+    vehicle_info = data.get('data', {})
     if not vehicle_info:
         result_text += "❌ No vehicle data available in the response."
         return result_text
 
-    # --- Registration & Status ---
-    reg = vehicle_info.get('registration', {})
-    if reg:
-        result_text += f"📋 *REGISTRATION & STATUS*\n"
-        result_text += f"├ Status: {'✅ Active' if reg.get('status') == 'ACTIVE' else '❌ ' + reg.get('status', 'N/A')}\n"
-        result_text += f"├ Class: `{escape_markdown(reg.get('class', 'N/A'))}`\n"
-        result_text += f"├ Reg. Date: `{escape_markdown(reg.get('date', 'N/A'))}`\n"
-        result_text += f"└ Mfg. Year: `{escape_markdown(reg.get('manufacturing_year', 'N/A'))}`\n\n"
+    # --- Registration & Basic Info ---
+    result_text += f"📋 *REGISTRATION & BASIC INFO*\n"
+    result_text += f"├ Registration Date: `{escape_markdown(vehicle_info.get('registration_date', 'N/A'))}`\n"
+    result_text += f"├ Registration Year: `{escape_markdown(vehicle_info.get('registration_year', 'N/A'))}`\n"
+    result_text += f"├ Registration Month: `{escape_markdown(vehicle_info.get('registration_month', 'N/A'))}`\n"
+    result_text += f"├ Registration Address: `{escape_markdown(vehicle_info.get('registration_address', 'N/A'))}`\n"
+    result_text += f"├ Source: `{escape_markdown(vehicle_info.get('source', 'N/A'))}`\n"
+    result_text += f"└ Asset Type: `{escape_markdown(vehicle_info.get('asset_type', 'N/A'))}`\n\n"
 
     # --- Vehicle Specifications ---
-    veh = vehicle_info.get('vehicle', {})
-    if veh:
-        result_text += f"⚙️ *VEHICLE SPECIFICATIONS*\n"
-        result_text += f"├ Manufacturer: `{escape_markdown(veh.get('manufacturer', 'N/A'))}`\n"
-        result_text += f"├ Model: `{escape_markdown(veh.get('model', 'N/A'))}`\n"
-        result_text += f"├ Variant: `{escape_markdown(veh.get('variant', 'N/A'))}`\n"
-        result_text += f"├ Fuel Type: `{escape_markdown(veh.get('fuel_type', 'N/A'))}`\n"
-        result_text += f"├ Color: `{escape_markdown(veh.get('color', 'N/A'))}`\n"
-        result_text += f"├ Body Type: `{escape_markdown(veh.get('body_type', 'N/A'))}`\n"
-        result_text += f"├ Category: `{escape_markdown(veh.get('category', 'N/A'))}`\n"
-        result_text += f"├ Seat Capacity: `{escape_markdown(veh.get('seat_capacity', 'N/A'))}`\n"
-        result_text += f"├ Cubic Capacity: `{escape_markdown(veh.get('cubic_capacity', 'N/A'))}` CC\n"
-        result_text += f"├ Weight: `{escape_markdown(veh.get('weight', 'N/A'))}` KG\n"
-        result_text += f"├ Chassis: `{escape_markdown(veh.get('chassis_number', 'N/A'))}`\n"
-        result_text += f"├ Engine: `{escape_markdown(veh.get('engine_number', 'N/A'))}`\n"
-        result_text += f"└ Commercial: {'✅ Yes' if veh.get('is_commercial') else '❌ No'}\n\n"
+    result_text += f"⚙️ *VEHICLE SPECIFICATIONS*\n"
+    result_text += f"├ Make: `{escape_markdown(vehicle_info.get('make_name', 'N/A'))}`\n"
+    result_text += f"├ Make (Full): `{escape_markdown(vehicle_info.get('make_name2', 'N/A'))}`\n"
+    result_text += f"├ Model: `{escape_markdown(vehicle_info.get('model_name', 'N/A'))}`\n"
+    result_text += f"├ Model (Full): `{escape_markdown(vehicle_info.get('model_name2', 'N/A'))}`\n"
+    result_text += f"├ Make & Model: `{escape_markdown(vehicle_info.get('make_model', 'N/A'))}`\n"
+    result_text += f"├ Fuel Type: `{escape_markdown(vehicle_info.get('fuel_type', 'N/A'))}`\n"
+    result_text += f"├ Vehicle Color: `{escape_markdown(vehicle_info.get('vehicle_color', 'N/A'))}`\n"
+    result_text += f"├ Vehicle Type: `{escape_markdown(vehicle_info.get('vehicle_type', 'N/A'))}`\n"
+    result_text += f"├ Vehicle Type V2: `{escape_markdown(vehicle_info.get('vehicle_type_v2', 'N/A'))}`\n"
+    result_text += f"├ Chassis Number: `{escape_markdown(vehicle_info.get('chassis_number', 'N/A'))}`\n"
+    result_text += f"├ Engine Number: `{escape_markdown(vehicle_info.get('engine_number', 'N/A'))}`\n"
+    result_text += f"└ Commercial: {'✅ Yes' if vehicle_info.get('is_commercial') else '❌ No'}\n\n"
 
-    # --- Owner Information ---
-    owner = vehicle_info.get('owner', {})
-    if owner:
-        result_text += f"👤 *OWNER INFORMATION*\n"
-        result_text += f"├ Name: `{escape_markdown(owner.get('name', 'N/A'))}`\n"
-        result_text += f"└ Owner Count: `{escape_markdown(owner.get('count', 'N/A'))}`\n\n"
+    # --- Address Information ---
+    result_text += f"📍 *ADDRESS INFORMATION*\n"
+    if vehicle_info.get('permanent_address'):
+        result_text += f"├ Permanent Address: `{escape_markdown(vehicle_info.get('permanent_address'))}`\n"
+    if vehicle_info.get('present_address'):
+        result_text += f"└ Present Address: `{escape_markdown(vehicle_info.get('present_address'))}`\n"
+    result_text += "\n"
 
-    # --- Financial & Insurance ---
-    fin = vehicle_info.get('financial', {})
-    ins = vehicle_info.get('insurance', {})
-    if fin or ins:
-        result_text += f"💰 *FINANCIAL & INSURANCE*\n"
-        if fin:
-            result_text += f"├ Financer: `{escape_markdown(fin.get('financer', 'N/A'))}`\n"
-            result_text += f"├ Hypothecation: {'✅ Yes' if fin.get('is_hypothecated') else '❌ No'}\n"
-        if ins:
-            result_text += f"├ Insurance Co.: `{escape_markdown(ins.get('company', 'N/A'))}`\n"
-            result_text += f"├ Policy No.: `{escape_markdown(ins.get('policy_number', 'N/A'))}`\n"
-            result_text += f"├ Valid Till: `{escape_markdown(ins.get('valid_till', 'N/A'))}`\n"
-            result_text += f"└ Status: `{escape_markdown(ins.get('status', 'N/A'))}`\n\n"
+    # --- Insurance Information ---
+    if vehicle_info.get('previous_insurer'):
+        result_text += f"🛡️ *INSURANCE INFORMATION*\n"
+        result_text += f"├ Previous Insurer: `{escape_markdown(vehicle_info.get('previous_insurer', 'N/A'))}`\n"
+        result_text += f"├ Policy Expiry Date: `{escape_markdown(vehicle_info.get('previous_policy_expiry_date', 'N/A'))}`\n"
+        result_text += f"└ Policy Expired: {'✅ Yes' if vehicle_info.get('previous_policy_expired') else '❌ No'}\n\n"
 
-    # --- Address ---
-    addr = vehicle_info.get('address', {})
-    if addr and (addr.get('line1') or addr.get('line2') or addr.get('pincode')):
-        result_text += f"📍 *ADDRESS*\n"
-        if addr.get('line1'):
-            result_text += f"├ Line 1: `{escape_markdown(addr.get('line1'))}`\n"
-        if addr.get('line2'):
-            result_text += f"├ Line 2: `{escape_markdown(addr.get('line2'))}`\n"
-        result_text += f"└ Pincode: `{escape_markdown(addr.get('pincode', 'N/A'))}`\n\n"
-
-    # --- Vendor Details ---
-    vendor = vehicle_info.get('vendor', {})
-    if vendor:
-        result_text += f"🏭 *VENDOR DETAILS*\n"
-        result_text += f"├ Manufacturer: `{escape_markdown(vendor.get('manufacturer', 'N/A'))}`\n"
-        result_text += f"├ Model: `{escape_markdown(vendor.get('model', 'N/A'))}`\n"
-        result_text += f"└ Variant ID: `{escape_markdown(vendor.get('variant_id', 'N/A'))}`\n"
+    # --- Additional Details ---
+    result_text += f"📌 *ADDITIONAL DETAILS*\n"
+    result_text += f"├ Asset Number: `{escape_markdown(vehicle_info.get('asset_number', 'N/A'))}`\n"
+    if vehicle_info.get('variant_id'):
+        variant_ids = ', '.join(str(v) for v in vehicle_info.get('variant_id', []))
+        result_text += f"└ Variant IDs: `{escape_markdown(variant_ids)}`\n"
 
     return result_text
 
@@ -292,7 +272,7 @@ def format_num_data(data, display_query):
     result_text += f"📱 Number: `{display_query}`\n"
     result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
     
-    if not data or not isinstance(data, list):
+    if not data or not isinstance(data, list) or len(data) == 0:
         result_text += "❌ No information found for this number."
         return result_text
     
@@ -348,7 +328,7 @@ def format_aadhar_data(data, display_query):
     result_text += f"🪪 Aadhaar: `{display_query}`\n"
     result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
     
-    if not data or not isinstance(data, list):
+    if not data or not isinstance(data, list) or len(data) == 0:
         result_text += "❌ No information found for this Aadhaar number."
         return result_text
     
@@ -477,7 +457,7 @@ async def vehicle_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
         
     if not context.args:
-        await update.message.reply_text("❌ Please provide a registration number!\n\nExample: `/vehicle KA31A1324`", parse_mode='Markdown')
+        await update.message.reply_text("❌ Please provide a registration number!\n\nExample: `/vehicle MH47BG7036`", parse_mode='Markdown')
         return
     
     registration_number = context.args[0].upper().strip()
@@ -485,12 +465,20 @@ async def vehicle_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         # Call the new API
-        params = {"vehicleNumber": registration_number}
+        params = {"reg_no": registration_number}
         response = session.get(VEHICLE_API, params=params, timeout=60)
         
         if response.status_code == 200:
             data = response.json()
-            result_text = format_vehicle_data(data, registration_number)
+            
+            # Check if data exists and is valid
+            if data.get('success') and data.get('data'):
+                result_text = format_vehicle_data(data, registration_number)
+            else:
+                result_text = f"🚗 *VEHICLE DETAILS*\n"
+                result_text += f"🔢 *Number:* `{registration_number}`\n"
+                result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                result_text += "❌ No vehicle data found for this registration number."
             
             # Truncate if too long
             if len(result_text) > 4000:
@@ -769,7 +757,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ━━━━━━━━━━━━━━━━━━━━━━━
 
 💡 *Commands:*
-`/vehicle KA31A1324`
+`/vehicle MH47BG7036`
 `/num 7701803770` - Mobile details
 `/aadhar 416401876424` - Aadhaar details
 `/pan ACCPA2495F`
@@ -808,7 +796,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
     elif data == "menu_vehicle":
         await query.edit_message_text(
-            "🚗 *VEHICLE SEARCH*\n\nPlease send the registration number.\nExample: `KA31A1324`\n\nType: `/vehicle KA31A1324`",
+            "🚗 *VEHICLE SEARCH*\n\nPlease send the registration number.\nExample: `MH47BG7036`\n\nType: `/vehicle MH47BG7036`",
             parse_mode='Markdown'
         )
     elif data == "menu_num":
@@ -877,7 +865,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ━━━━━━━━━━━━━━━━━━━━━━━
 
 *Examples:*
-`/vehicle KA31A1324`
+`/vehicle MH47BG7036`
 `/num 7701803770` - Mobile details
 `/aadhar 416401876424` - Aadhaar details
 `/pan ACCPA2495F`
@@ -887,7 +875,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 *About Vehicle Search:*
 • `/vehicle` - Search by registration number
-• Returns: Registration Status, Vehicle Specs, Owner Info, Insurance, Address, Vendor Details
+• Returns: Registration Status, Vehicle Specs, Address, Insurance, Additional Details
 
 *About Aadhaar Search:*
 • `/aadhar` - Search by 12-digit Aadhaar number
@@ -936,22 +924,19 @@ def main():
     print("✅ All commands loaded successfully")
     print("Commands: /start, /access, /vehicle, /num, /aadhar, /pan, /upi")
     print("\n🚗 Vehicle Search:")
-    print("   - New API: https://vehicelix.vercel.app/api/vehicle-details")
-    print("   - Usage: /vehicle KA31A1324")
+    print("   - New API: https://chuchirandiki.vercel.app/api/vehicle?reg_no=XXXXXXXXXX")
+    print("   - Usage: /vehicle MH47BG7036")
     print("   - Returns comprehensive vehicle details with emojis")
+    print("   - Shows 'No vehicle data found' for invalid registration numbers")
     print("\n📱 Mobile Search:")
-    print("   - New API: https://api.paanel.shop/api/gateway.php?key=Seeker&number=XXXXXXXXXX")
+    print("   - API: https://api.paanel.shop/api/gateway.php?key=Seeker&number=XXXXXXXXXX")
     print("   - Usage: /num 7701803770")
-    print("   - Returns formatted data with emojis")
+    print("   - Shows 'No information found' for invalid numbers")
     print("   - Duplicate results automatically removed")
-    print("   - data_id field removed from output")
-    print("   - Random ICIC and MSID added to each result")
     print("\n🪪 Aadhaar Search:")
-    print("   - New API: https://api.paanel.shop/api/gateway.php")
+    print("   - API: https://api.paanel.shop/api/gateway.php")
     print("   - Usage: /aadhar 416401876424")
-    print("   - Returns formatted data with emojis")
-    print("   - data_id removed from output")
-    print("   - Random SIM ID added to each result")
+    print("   - Shows 'No information found' for invalid Aadhaar numbers")
     print("   - Duplicate results automatically removed")
     print("\n🔒 All API endpoints and keys are hidden from users")
     application.run_polling(allowed_updates=Update.ALL_TYPES)

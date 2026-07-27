@@ -48,7 +48,7 @@ AUTHORIZED_USERS = load_auth_users()
 VEHICLE_API = "https://chuchirandiki.vercel.app/api/vehicle"
 # NEW API for mobile and Aadhaar lookup (replaces old ones)
 SEARCH_API = "https://raxxosint.onrender.com/leakosint"
-SEARCH_API_KEY = "MRX"  # The key parameter for the search API
+SEARCH_API_KEY = "MRXISBACK"  # The key parameter for the search API
 SPINNY_URL = "https://api.spinny.com/v3/api/vehicle/full-pan-details/"
 UPI_API = "https://api.truebalance.cc/v2/v2/payment/validateVPA"
 SPINNY_AUTH_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgzNDM5MDY2LCJqdGkiOiIxOTUyOTJkNDdiNjE0M2M2YjExNGUyOWQwMjc1OTA1NSIsInVzZXJfaWQiOjI3ODQxMzg3fQ.uAQg937MTs_4Dz7rgGqX28xVX7liEx6jIm0-1SL2SNc"

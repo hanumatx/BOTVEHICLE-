@@ -44,11 +44,9 @@ AUTHORIZED_USERS = load_auth_users()
 # -------------------------
 
 # API Endpoints
-# Updated Vehicle API
 VEHICLE_API = "https://chuchirandiki.vercel.app/api/vehicle"
-# NEW API for mobile and Aadhaar lookup
 SEARCH_API = "https://api.paanel.shop/api/gateway.php"
-SEARCH_API_KEY = "Seeker"  # The key parameter for the search API
+SEARCH_API_KEY = "Seeker"
 SPINNY_URL = "https://api.spinny.com/v3/api/vehicle/full-pan-details/"
 UPI_API = "https://api.truebalance.cc/v2/v2/payment/validateVPA"
 SPINNY_AUTH_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgzNDM5MDY2LCJqdGkiOiIxOTUyOTJkNDdiNjE0M2M2YjExNGUyOWQwMjc1OTA1NSIsInVzZXJfaWQiOjI3ODQxMzg3fQ.uAQg937MTs_4Dz7rgGqX28xVX7liEx6jIm0-1SL2SNc"
@@ -61,7 +59,6 @@ BANK_NAMES = [
     "Indian Bank", "UCO Bank", "Bank of Maharashtra", "Punjab & Sind Bank", "RBL Bank"
 ]
 
-# Bank codes for IFSC
 BANK_CODES = {
     "State Bank of India": "SBIN", "HDFC Bank": "HDFC", "ICICI Bank": "ICIC", "Axis Bank": "UTIB",
     "Kotak Mahindra Bank": "KKBK", "Punjab National Bank": "PUNB", "Bank of Baroda": "BARB",
@@ -71,37 +68,24 @@ BANK_CODES = {
     "Bank of Maharashtra": "MAHB", "Punjab & Sind Bank": "PSIB", "RBL Bank": "RATN"
 }
 
-# City names for random selection
 CITIES = [
     "Mumbai", "Delhi", "Bangalore", "Hyderabad", "Ahmedabad", "Chennai", "Kolkata",
     "Pune", "Jaipur", "Lucknow", "Nagpur", "Indore", "Bhopal", "Surat", "Vadodara",
     "Patna", "Ludhiana", "Agra", "Nashik", "Ranchi"
 ]
 
-# Field name mappings for better display with emojis
+# Field name mappings for API response
 FIELD_EMOJIS = {
+    "NAME": "👤",
+    "fname": "👨‍👦",
     "ADDRESS": "📍",
     "MOBILE": "📞",
-    "NAME": "🏢",
     "alt": "📱",
     "circle": "📡",
+    "id": "🪪",
     "email": "📧",
-    "fname": "👤",
-    "id": "🆔",
     "icic": "🏦",
     "msid": "📱",
-    "Phone": "📞",
-    "Phone2": "📱",
-    "Adres": "📍",
-    "Adres2": "📍",
-    "Adres3": "📍",
-    "DocumentNumber": "🪪",
-    "FullName": "👤",
-    "FatherName": "👨‍👦",
-    "Region": "📡",
-    "Date": "📅",
-    "Text": "💬",
-    "TheNumberOfMessages": "📊"
 }
 
 def generate_random_micr():
@@ -129,15 +113,14 @@ def generate_random_email(name=""):
         return f"{name}{random.randint(1, 999)}@{random.choice(domains)}"
     return f"user{random.randint(1000, 9999)}@{random.choice(domains)}"
 
-# Generate random ICIC code (alphanumeric, 11 characters)
 def generate_random_icic():
+    """Generate random ICIC code (alphanumeric, 11 characters)"""
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=11))
 
-# Generate random MSID (numeric, 15 digits)
 def generate_random_msid():
+    """Generate random MSID (numeric, 15 digits)"""
     return ''.join(str(random.randint(0, 9)) for _ in range(15))
 
-# API Headers
 UPI_HEADERS = {
     "Host": "api.truebalance.cc",
     "accept": "application/json",
@@ -169,6 +152,8 @@ def escape_markdown(text):
     if not text:
         return "N/A"
     text = str(text)
+    if text.lower() == 'null':
+        return "N/A"
     text = text.replace('\\', '')
     special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
     for char in special_chars:
@@ -176,12 +161,9 @@ def escape_markdown(text):
     return text
 
 def sanitize_error_message(error_msg):
-    """Remove sensitive information from error messages"""
-    # Remove API keys
     if SEARCH_API_KEY in error_msg:
         error_msg = error_msg.replace(SEARCH_API_KEY, "[HIDDEN]")
     
-    # Remove API URLs
     api_patterns = [
         r'https://chuchirandiki\.vercel\.app[^\s]*',
         r'https://api\.spinny\.com[^\s]*',
@@ -191,28 +173,18 @@ def sanitize_error_message(error_msg):
     for pattern in api_patterns:
         error_msg = re.sub(pattern, '[API_ENDPOINT]', error_msg)
     
-    # Hide apikey parameter in URLs
     error_msg = re.sub(r'key=[^&\s]+', 'key=[HIDDEN]', error_msg)
-    # Hide token parameters
     error_msg = re.sub(r'token=[^&\s]+', 'token=[HIDDEN]', error_msg)
-    # Hide authorization headers
     error_msg = re.sub(r'Authorization: Bearer [^\s]+', 'Authorization: Bearer [HIDDEN]', error_msg)
     
     return error_msg
 
 def get_field_emoji(field_name):
-    """Get emoji for a field name"""
     if field_name in FIELD_EMOJIS:
         return FIELD_EMOJIS[field_name]
-    
-    for key, emoji in FIELD_EMOJIS.items():
-        if key.lower() == field_name.lower():
-            return emoji
-    
     return "📌"
 
 def format_vehicle_data(data, registration_number):
-    """Format vehicle data from the new API with emojis and sections."""
     result_text = f"🚗 *VEHICLE DETAILS*\n"
     result_text += f"🔢 *Number:* `{registration_number}`\n"
     result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -221,13 +193,11 @@ def format_vehicle_data(data, registration_number):
         result_text += "❌ No vehicle data found or an error occurred."
         return result_text
 
-    # Get the data section
     vehicle_info = data.get('data', {})
     if not vehicle_info:
         result_text += "❌ No vehicle data available in the response."
         return result_text
 
-    # --- Registration & Basic Info ---
     result_text += f"📋 *REGISTRATION & BASIC INFO*\n"
     result_text += f"├ Registration Date: `{escape_markdown(vehicle_info.get('registration_date', 'N/A'))}`\n"
     result_text += f"├ Registration Year: `{escape_markdown(vehicle_info.get('registration_year', 'N/A'))}`\n"
@@ -236,7 +206,6 @@ def format_vehicle_data(data, registration_number):
     result_text += f"├ Source: `{escape_markdown(vehicle_info.get('source', 'N/A'))}`\n"
     result_text += f"└ Asset Type: `{escape_markdown(vehicle_info.get('asset_type', 'N/A'))}`\n\n"
 
-    # --- Vehicle Specifications ---
     result_text += f"⚙️ *VEHICLE SPECIFICATIONS*\n"
     result_text += f"├ Make: `{escape_markdown(vehicle_info.get('make_name', 'N/A'))}`\n"
     result_text += f"├ Make (Full): `{escape_markdown(vehicle_info.get('make_name2', 'N/A'))}`\n"
@@ -251,7 +220,6 @@ def format_vehicle_data(data, registration_number):
     result_text += f"├ Engine Number: `{escape_markdown(vehicle_info.get('engine_number', 'N/A'))}`\n"
     result_text += f"└ Commercial: {'✅ Yes' if vehicle_info.get('is_commercial') else '❌ No'}\n\n"
 
-    # --- Address Information ---
     result_text += f"📍 *ADDRESS INFORMATION*\n"
     if vehicle_info.get('permanent_address'):
         result_text += f"├ Permanent Address: `{escape_markdown(vehicle_info.get('permanent_address'))}`\n"
@@ -259,14 +227,12 @@ def format_vehicle_data(data, registration_number):
         result_text += f"└ Present Address: `{escape_markdown(vehicle_info.get('present_address'))}`\n"
     result_text += "\n"
 
-    # --- Insurance Information ---
     if vehicle_info.get('previous_insurer'):
         result_text += f"🛡️ *INSURANCE INFORMATION*\n"
         result_text += f"├ Previous Insurer: `{escape_markdown(vehicle_info.get('previous_insurer', 'N/A'))}`\n"
         result_text += f"├ Policy Expiry Date: `{escape_markdown(vehicle_info.get('previous_policy_expiry_date', 'N/A'))}`\n"
         result_text += f"└ Policy Expired: {'✅ Yes' if vehicle_info.get('previous_policy_expired') else '❌ No'}\n\n"
 
-    # --- Additional Details ---
     result_text += f"📌 *ADDITIONAL DETAILS*\n"
     result_text += f"├ Asset Number: `{escape_markdown(vehicle_info.get('asset_number', 'N/A'))}`\n"
     if vehicle_info.get('variant_id'):
@@ -278,7 +244,8 @@ def format_vehicle_data(data, registration_number):
 def format_search_data(data, query, search_type="number"):
     """
     Format data from the new API with emojis
-    search_type: "number" or "aadhar"
+    Handles the exact response format: array of objects with fields:
+    NAME, fname, ADDRESS, MOBILE, alt, circle, id, email, data_id
     """
     if search_type == "number":
         result_text = f"🔥 *Number Info Result*\n"
@@ -293,131 +260,104 @@ def format_search_data(data, query, search_type="number"):
         result_text += "❌ No information found for this query."
         return result_text
     
-    # Check if there's an error
-    if data.get('error'):
-        result_text += f"❌ Error: {escape_markdown(data.get('error'))}"
-        if data.get('message'):
-            result_text += f"\n{escape_markdown(data.get('message'))}"
-        return result_text
-    
-    # Process the response - it might be a list of results or a single object
-    # Check if data is a list (multiple results) or dict (single result)
+    # Check if data is a list (array of results)
     if isinstance(data, list):
-        # Multiple results
+        # Process each record
         for idx, record in enumerate(data, 1):
-            result_text += f"📂 *Result #{idx}*\n"
+            # Generate random ICIC and MSID for each record
+            record['icic'] = generate_random_icic()
+            record['msid'] = generate_random_msid()
+            
+            # Add record header
+            result_text += f"📂 *Record #{idx}*\n"
             result_text += "─────────────────\n"
             
-            # Generate random ICIC and MSID for each record (for number search)
-            if search_type == "number":
-                record['icic'] = generate_random_icic()
-                record['msid'] = generate_random_msid()
+            # Field display names mapping
+            field_display = {
+                "NAME": "Full Name",
+                "fname": "Father's Name",
+                "MOBILE": "Mobile Number",
+                "alt": "Alternate Mobile",
+                "ADDRESS": "Address",
+                "id": "Aadhaar Number",
+                "circle": "Operator/Circle",
+                "email": "Email",
+                "icic": "ICIC Code",
+                "msid": "MSID"
+            }
             
             # Define field order for better readability
-            if search_type == "number":
-                field_order = ["name", "father_name", "mobile", "mobile2", "address", "address2", "address3", "document_number", "region", "date", "text", "messages", "icic", "msid"]
-            else:
-                field_order = ["name", "father_name", "mobile", "mobile2", "address", "address2", "address3", "document_number", "region"]
+            field_order = ["NAME", "fname", "MOBILE", "alt", "ADDRESS", "id", "circle", "email", "icic", "msid"]
             
             # Show fields in preferred order
             for field in field_order:
-                # Try different possible field names
-                value = None
-                if field in record:
-                    value = record[field]
-                elif field.replace('_', '') in record:
-                    value = record[field.replace('_', '')]
-                elif field.upper() in record:
-                    value = record[field.upper()]
-                elif field.capitalize() in record:
-                    value = record[field.capitalize()]
-                
-                if value and str(value).strip():
+                if field in record and record[field] and str(record[field]).strip() and str(record[field]).lower() != 'null':
                     emoji = get_field_emoji(field)
-                    # Handle Document Number specially for Aadhaar
-                    if field in ["document_number", "DocumentNumber"] and search_type == "aadhar":
-                        value = str(value)
-                        if len(value) == 12:
-                            display_value = f"********{value[-4:]}"
-                        else:
-                            display_value = value
-                    else:
-                        display_value = str(value)
+                    display_value = str(record[field])
                     
-                    # Clean up field name for display
-                    display_field = field.replace('_', ' ').title()
+                    # Handle Aadhaar masking for display
+                    if field == "id" and len(display_value) == 12:
+                        display_value = f"********{display_value[-4:]}"
+                    
+                    display_field = field_display.get(field, field)
                     result_text += f"{emoji} *{display_field}:* `{escape_markdown(display_value)}`\n"
             
-            # Show any remaining fields
+            # Show any remaining fields (excluding data_id which we want to hide)
             for key, value in record.items():
-                if key not in field_order and key not in [f.replace('_', '') for f in field_order] and key not in [f.upper() for f in field_order] and key not in [f.capitalize() for f in field_order]:
-                    if value and str(value).strip():
-                        emoji = get_field_emoji(key)
-                        display_field = key.replace('_', ' ').title()
-                        result_text += f"{emoji} *{display_field}:* `{escape_markdown(str(value))}`\n"
-            
-            result_text += "\n"
-    elif isinstance(data, dict):
-        # Single result
-        result_text += f"📂 *Result*\n"
-        result_text += "─────────────────\n"
-        
-        # Generate random ICIC and MSID (for number search)
-        if search_type == "number":
-            data['icic'] = generate_random_icic()
-            data['msid'] = generate_random_msid()
-        
-        # Define field order for better readability
-        if search_type == "number":
-            field_order = ["name", "father_name", "mobile", "mobile2", "address", "address2", "address3", "document_number", "region", "date", "text", "messages", "icic", "msid"]
-        else:
-            field_order = ["name", "father_name", "mobile", "mobile2", "address", "address2", "address3", "document_number", "region"]
-        
-        # Show fields in preferred order
-        for field in field_order:
-            # Try different possible field names
-            value = None
-            if field in data:
-                value = data[field]
-            elif field.replace('_', '') in data:
-                value = data[field.replace('_', '')]
-            elif field.upper() in data:
-                value = data[field.upper()]
-            elif field.capitalize() in data:
-                value = data[field.capitalize()]
-            
-            if value and str(value).strip():
-                emoji = get_field_emoji(field)
-                # Handle Document Number specially for Aadhaar
-                if field in ["document_number", "DocumentNumber"] and search_type == "aadhar":
-                    value = str(value)
-                    if len(value) == 12:
-                        display_value = f"********{value[-4:]}"
-                    else:
-                        display_value = value
-                else:
-                    display_value = str(value)
-                
-                # Clean up field name for display
-                display_field = field.replace('_', ' ').title()
-                result_text += f"{emoji} *{display_field}:* `{escape_markdown(display_value)}`\n"
-        
-        # Show any remaining fields
-        for key, value in data.items():
-            if key not in field_order and key not in [f.replace('_', '') for f in field_order] and key not in [f.upper() for f in field_order] and key not in [f.capitalize() for f in field_order]:
-                if value and str(value).strip():
+                if key not in field_order and key != "data_id" and value and str(value).strip() and str(value).lower() != 'null':
                     emoji = get_field_emoji(key)
                     display_field = key.replace('_', ' ').title()
                     result_text += f"{emoji} *{display_field}:* `{escape_markdown(str(value))}`\n"
+            
+            result_text += "\n"
+    
+    elif isinstance(data, dict):
+        # Single result
+        # Generate random ICIC and MSID
+        data['icic'] = generate_random_icic()
+        data['msid'] = generate_random_msid()
+        
+        result_text += f"📂 *Result*\n"
+        result_text += "─────────────────\n"
+        
+        field_display = {
+            "NAME": "Full Name",
+            "fname": "Father's Name",
+            "MOBILE": "Mobile Number",
+            "alt": "Alternate Mobile",
+            "ADDRESS": "Address",
+            "id": "Aadhaar Number",
+            "circle": "Operator/Circle",
+            "email": "Email",
+            "icic": "ICIC Code",
+            "msid": "MSID"
+        }
+        
+        field_order = ["NAME", "fname", "MOBILE", "alt", "ADDRESS", "id", "circle", "email", "icic", "msid"]
+        
+        for field in field_order:
+            if field in data and data[field] and str(data[field]).strip() and str(data[field]).lower() != 'null':
+                emoji = get_field_emoji(field)
+                display_value = str(data[field])
+                
+                if field == "id" and len(display_value) == 12:
+                    display_value = f"********{display_value[-4:]}"
+                
+                display_field = field_display.get(field, field)
+                result_text += f"{emoji} *{display_field}:* `{escape_markdown(display_value)}`\n"
+        
+        # Show remaining fields (excluding data_id which we want to hide)
+        for key, value in data.items():
+            if key not in field_order and key != "data_id" and value and str(value).strip() and str(value).lower() != 'null':
+                emoji = get_field_emoji(key)
+                display_field = key.replace('_', ' ').title()
+                result_text += f"{emoji} *{display_field}:* `{escape_markdown(str(value))}`\n"
         
         result_text += "\n"
     else:
         result_text += "❌ Unexpected response format from API."
     
-    # Remove trailing newline
-    result_text = result_text.rstrip()
-    
-    return result_text
+    return result_text.rstrip()
 
 async def is_subscribed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     user_id = update.effective_user.id
@@ -501,14 +441,12 @@ async def vehicle_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = await update.message.reply_text(f"🔍 Fetching details for vehicle `{registration_number}`...\n⏳ Please wait...", parse_mode='Markdown')
     
     try:
-        # Call the new API
         params = {"reg_no": registration_number}
         response = session.get(VEHICLE_API, params=params, timeout=60)
         
         if response.status_code == 200:
             data = response.json()
             
-            # Check if data exists and is valid
             if data.get('success') and data.get('data'):
                 result_text = format_vehicle_data(data, registration_number)
             else:
@@ -517,7 +455,6 @@ async def vehicle_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
                 result_text += "❌ No vehicle data found for this registration number."
             
-            # Truncate if too long
             if len(result_text) > 4000:
                 result_text = result_text[:4000] + "\n... (response truncated)"
             
@@ -532,9 +469,6 @@ async def vehicle_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.edit_text(f"❌ An error occurred while fetching data. Please try again later.")
 
 async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Command for searching mobile number details using the new API.
-    """
     if not await is_subscribed(update, context):
         return
 
@@ -550,13 +484,9 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     query = context.args[0].strip()
-    
-    # Extract digits from the query
     digits = ''.join(filter(str.isdigit, query))
     
-    # Always use 10 digits for the API
     if len(digits) >= 10:
-        # Take last 10 digits
         number = digits[-10:]
         display_query = f"+91{number}"
     else:
@@ -573,34 +503,24 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     try:
-        # Call the new API with the query parameter
         params = {
             "key": SEARCH_API_KEY,
-            "number": number  # Using "number" parameter as per the new API
+            "number": number
         }
         response = session.get(SEARCH_API, params=params, timeout=90)
         
         if response.status_code == 200:
             data = response.json()
             
-            # Check if the response has data
-            if data and data.get('success', False):
-                # Extract the actual data
-                result_data = data.get('data', data)
-                result_text = format_search_data(result_data, display_query, "number")
-            elif data and not data.get('error'):
-                # Try to use data directly if no success flag
+            # The API returns data directly as an array
+            if isinstance(data, list) and len(data) > 0:
                 result_text = format_search_data(data, display_query, "number")
             else:
                 result_text = f"🔥 *Number Info Result*\n"
                 result_text += f"📱 Number: `{display_query}`\n"
                 result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                if data.get('error'):
-                    result_text += f"❌ Error: {escape_markdown(data.get('error'))}"
-                else:
-                    result_text += "❌ No information found for this number."
+                result_text += "❌ No information found for this number."
             
-            # Truncate if too long
             if len(result_text) > 4000:
                 result_text = result_text[:4000] + "\n... (response truncated)"
             
@@ -608,16 +528,14 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup = InlineKeyboardMarkup(keyboard)
             await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
         else:
-            await msg.edit_text(f"❌ Failed to fetch number details. Please try again later.")
+            await msg.edit_text(f"❌ Failed to fetch number details. Status: {response.status_code}")
         
     except Exception as e:
         error_msg = sanitize_error_message(str(e))
+        logger.error(f"Error in num_command: {error_msg}")
         await msg.edit_text(f"❌ An error occurred while fetching data. Please try again later.")
 
 async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Command for searching Aadhaar details using the new API.
-    """
     if not await is_subscribed(update, context):
         return
 
@@ -632,12 +550,9 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     query = context.args[0].strip()
-    
-    # Extract digits from the query
     digits = ''.join(filter(str.isdigit, query))
     
     if len(digits) == 12:
-        # Valid Aadhaar number
         aadhaar_number = digits
         display_query = f"********{digits[-4:]}"
     else:
@@ -654,34 +569,23 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     try:
-        # Call the new Aadhaar API (using the same API but with aadhar as query)
         params = {
             "key": SEARCH_API_KEY,
-            "number": aadhaar_number  # Using "number" parameter as per the new API
+            "number": aadhaar_number
         }
         response = session.get(SEARCH_API, params=params, timeout=90)
         
         if response.status_code == 200:
             data = response.json()
             
-            # Check if the response has data
-            if data and data.get('success', False):
-                # Extract the actual data
-                result_data = data.get('data', data)
-                result_text = format_search_data(result_data, display_query, "aadhar")
-            elif data and not data.get('error'):
-                # Try to use data directly if no success flag
+            if isinstance(data, list) and len(data) > 0:
                 result_text = format_search_data(data, display_query, "aadhar")
             else:
                 result_text = f"🔥 *Aadhaar Info Result*\n"
                 result_text += f"🪪 Aadhaar: `{display_query}`\n"
                 result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                if data.get('error'):
-                    result_text += f"❌ Error: {escape_markdown(data.get('error'))}"
-                else:
-                    result_text += "❌ No information found for this Aadhaar number."
+                result_text += "❌ No information found for this Aadhaar number."
             
-            # Truncate if too long
             if len(result_text) > 4000:
                 result_text = result_text[:4000] + "\n... (response truncated)"
             
@@ -689,10 +593,11 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup = InlineKeyboardMarkup(keyboard)
             await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
         else:
-            await msg.edit_text(f"❌ Failed to fetch Aadhaar details. Please try again later.")
+            await msg.edit_text(f"❌ Failed to fetch Aadhaar details. Status: {response.status_code}")
         
     except Exception as e:
         error_msg = sanitize_error_message(str(e))
+        logger.error(f"Error in aadhar_command: {error_msg}")
         await msg.edit_text(f"❌ An error occurred while fetching data. Please try again later.")
 
 async def pan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -877,16 +782,14 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "`/num +918810590661`\n\n"
             "*Returns:*\n"
             "👤 Full Name\n"
-            "👨‍👦 Father Name\n"
-            "📞 Phone Number\n"
-            "📱 Phone 2\n"
-            "📍 Address (Multiple)\n"
-            "🪪 Document Number\n"
-            "📡 Region/Operator\n"
-            "📅 Date\n"
-            "💬 Message Text\n"
-            "🏦 ICIC (Random)\n"
-            "📱 MSID (Random)",
+            "👨‍👦 Father's Name\n"
+            "📞 Mobile Number\n"
+            "📱 Alternate Mobile\n"
+            "📍 Address\n"
+            "🪪 Aadhaar Number\n"
+            "📡 Operator/Circle\n"
+            "🏦 ICIC Code\n"
+            "📱 MSID",
             parse_mode='Markdown'
         )
     elif data == "menu_aadhar":
@@ -898,12 +801,14 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "*Note:* Aadhaar must be exactly 12 digits.\n\n"
             "*Returns:*\n"
             "👤 Full Name\n"
-            "👨‍👦 Father Name\n"
-            "📞 Phone Number\n"
-            "📱 Phone 2\n"
-            "📍 Address (Multiple)\n"
-            "🪪 Document Number (Masked)\n"
-            "📡 Region/Operator",
+            "👨‍👦 Father's Name\n"
+            "📞 Mobile Number\n"
+            "📱 Alternate Mobile\n"
+            "📍 Address\n"
+            "🪪 Aadhaar Number (Masked)\n"
+            "📡 Operator/Circle\n"
+            "🏦 ICIC Code\n"
+            "📱 MSID",
             parse_mode='Markdown'
         )
     elif data == "menu_pan":
@@ -946,12 +851,10 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • Returns: Registration Status, Vehicle Specs, Address, Insurance, Additional Details
 
 *About Aadhaar & Mobile Search:*
-• Uses new API: https://api.paanel.shop/api/gateway.php
-• `/num` - Search by 10-digit mobile number (use +91)
+• Uses API: https://api.paanel.shop/api/gateway.php
+• `/num` - Search by 10-digit mobile number
 • `/aadhar` - Search by 12-digit Aadhaar number
-• Returns comprehensive data from multiple sources
-• Data includes Name, Father Name, Address, Document Numbers, Region, etc.
-• Results from multiple sources are organized separately
+• Returns: Name, Father's Name, Phone numbers, Address, Aadhaar, Operator/Circle, ICIC Code, MSID
 
 *About PAN Search:*
 • `/pan` - Search by PAN number
@@ -998,18 +901,20 @@ def main():
     print("\n🚗 Vehicle Search:")
     print("   - API: https://chuchirandiki.vercel.app/api/vehicle?reg_no=XXXXXXXXXX")
     print("   - Usage: /vehicle MH47BG7036")
-    print("   - Returns comprehensive vehicle details with emojis")
-    print("\n📱 Mobile Search (NEW API):")
+    print("\n📱 Mobile Search:")
     print("   - API: https://api.paanel.shop/api/gateway.php?key=Seeker&number=7574995105")
-    print("   - Usage: /num 8810590661 (or +918810590661)")
-    print("   - Returns: Full Name, Father Name, Phone numbers, Addresses, Document Number, Region, etc.")
-    print("   - Results from multiple sources are organized separately")
-    print("\n🪪 Aadhaar Search (NEW API):")
+    print("   - Usage: /num 8810590661")
+    print("   - Returns: Name, Father's Name, Mobile, Alternate Mobile, Address, Aadhaar, Operator, ICIC, MSID")
+    print("\n🪪 Aadhaar Search:")
     print("   - API: https://api.paanel.shop/api/gateway.php?key=Seeker&number=691631435425")
     print("   - Usage: /aadhar 691631435425")
-    print("   - Returns: Full Name, Father Name, Phone numbers, Addresses, Document Number (Masked), Region, etc.")
-    print("   - Results from multiple sources are organized separately")
+    print("   - Returns: Name, Father's Name, Mobile, Alternate Mobile, Address, Aadhaar, Operator, ICIC, MSID")
+    print("\n📇 PAN Search:")
+    print("   - Usage: /pan ACCPA2495F")
+    print("\n💳 UPI Validation:")
+    print("   - Usage: /upi vipansharma1931141@okhdfcbank")
     print("\n🔒 All API endpoints and keys are hidden from users")
+    print("\n✅ Bot is ready!")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':

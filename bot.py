@@ -101,12 +101,16 @@ FIELD_EMOJIS = {
     "Adres3": "📍",
     "DocumentNumber": "🪪",
     "Email": "📧",
+    "Email2": "📧",
     "Region": "📡",
     "City": "🏙️",
+    "Stat": "🗺️",
     "State": "🗺️",
+    "IndianState": "🗺️",
     "PostalCode": "📮",
     "Provider": "📡",
     "MobileOperator": "📡",
+    "MobilePhone": "📞",
     "DateOfBirth": "🎂",
     "Company": "🏢",
     "Category": "📋",
@@ -123,9 +127,6 @@ FIELD_EMOJIS = {
     "EncryptedPassword": "🔒",
     "CreditsInappPoints": "⭐",
     "PinCode": "📮",
-    "Email2": "📧",
-    "IndianState": "🗺️",
-    "MobilePhone": "📞"
 }
 
 def generate_random_micr():
@@ -301,10 +302,24 @@ def format_leakosint_data(data, query, search_type="number"):
     
     # Check if we have data dictionary with sources
     if isinstance(data, dict):
-        # Get all sources except we'll skip the developer field
+        # Get all sources - we'll skip developer field and other metadata
         sources = {k: v for k, v in data.items() if k not in ['developer', 'status', 'success', 'status_code', 'http_status', 'query']}
         
         record_count = 0
+        total_records = 0
+        
+        # First count total records
+        for source_name, source_data in sources.items():
+            if isinstance(source_data, dict) and 'records' in source_data:
+                records = source_data.get('records', [])
+                if records:
+                    total_records += len(records)
+        
+        if total_records == 0:
+            result_text += "❌ No records found in any source."
+            return result_text
+        
+        # Now display all records
         for source_name, source_data in sources.items():
             if not isinstance(source_data, dict):
                 continue
@@ -316,11 +331,7 @@ def format_leakosint_data(data, query, search_type="number"):
                 
             for record in records:
                 record_count += 1
-                if record_count == 1:
-                    # No source header - just show data
-                    result_text += f"📂 *Record #{record_count}*\n"
-                else:
-                    result_text += f"\n📂 *Record #{record_count}*\n"
+                result_text += f"📂 *Record #{record_count}*\n"
                 result_text += "─────────────────\n"
                 
                 # Define display names for fields
@@ -346,6 +357,7 @@ def format_leakosint_data(data, query, search_type="number"):
                     "DocumentNumber": "Document Number",
                     "Region": "Region",
                     "City": "City",
+                    "Stat": "State",
                     "State": "State",
                     "IndianState": "State",
                     "Country": "Country",
@@ -365,23 +377,16 @@ def format_leakosint_data(data, query, search_type="number"):
                     "EncryptedPassword": "Encrypted Password",
                     "CreditsInappPoints": "Points/Balance",
                     "PinCode": "PIN Code",
-                    "Stat": "State"
                 }
                 
                 # Define field order for better readability
-                field_order = ["FullName", "Name", "Surname", "FatherName", "Phone", "Phone2", "Phone3", "Phone4", "Phone5", "Phone6", "Phone7", "Phone8", "MobilePhone", "Email", "Email2", "Adres", "Adres2", "Adres3", "DocumentNumber", "Region", "City", "State", "IndianState", "Country", "PostalCode", "Provider", "MobileOperator", "DateOfBirth", "Company", "Category", "Type", "IP", "RegistrationDate", "TheDateOfTheEntrance", "Nick", "Login", "Titul", "EncryptedPassword", "CreditsInappPoints", "PinCode", "Stat"]
+                field_order = ["FullName", "Name", "Surname", "FatherName", "Phone", "Phone2", "Phone3", "Phone4", "Phone5", "Phone6", "Phone7", "Phone8", "MobilePhone", "Email", "Email2", "Adres", "Adres2", "Adres3", "DocumentNumber", "Region", "City", "Stat", "State", "IndianState", "Country", "PostalCode", "Provider", "MobileOperator", "DateOfBirth", "Company", "Category", "Type", "IP", "RegistrationDate", "TheDateOfTheEntrance", "Nick", "Login", "Titul", "EncryptedPassword", "CreditsInappPoints", "PinCode"]
                 
                 # Show fields in preferred order
                 for field in field_order:
                     if field in record and record[field] and str(record[field]).strip() and str(record[field]).lower() != 'null':
                         emoji = get_field_emoji(field)
                         display_value = str(record[field])
-                        
-                        # Handle Aadhaar/Document masking for display if needed
-                        if field in ["DocumentNumber", "id"] and len(display_value) >= 12:
-                            # Don't mask completely, show full if available
-                            pass
-                        
                         display_field = field_display.get(field, field.replace('_', ' ').title())
                         result_text += f"{emoji} *{display_field}:* `{escape_markdown(display_value)}`\n"
                 
@@ -391,6 +396,8 @@ def format_leakosint_data(data, query, search_type="number"):
                         emoji = get_field_emoji(key)
                         display_field = key.replace('_', ' ').title()
                         result_text += f"{emoji} *{display_field}:* `{escape_markdown(str(value))}`\n"
+                
+                result_text += "\n"
         
         if record_count == 0:
             result_text += "❌ No records found in any source."
@@ -409,6 +416,7 @@ def format_leakosint_data(data, query, search_type="number"):
                     emoji = get_field_emoji(key)
                     display_field = key.replace('_', ' ').title()
                     result_text += f"{emoji} *{display_field}:* `{escape_markdown(str(value))}`\n"
+            result_text += "\n"
     
     else:
         result_text += "❌ Unexpected response format from API."
@@ -787,7 +795,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 💡 *Commands:*
 `/vehicle MH47BG7036`
-`/num 8810590661` - Mobile details (use +91)
+`/num +919873534030` - Mobile details
 `/aadhar 691631435425` - Aadhaar details
 `/pan ACCPA2495F`
 `/upi vipansharma1931141@okhdfcbank`
@@ -833,8 +841,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "📱 *MOBILE SEARCH*\n\n"
             "Search details for any mobile number.\n\n"
             "*Usage:*\n"
-            "`/num 8810590661`\n"
-            "`/num +918810590661`\n\n"
+            "`/num +919873534030`\n"
+            "`/num 9873534030`\n\n"
             "*Returns comprehensive data from multiple sources:*\n"
             "• Full Name & Father's Name\n"
             "• Phone numbers (up to 8)\n"

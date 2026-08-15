@@ -45,8 +45,8 @@ AUTHORIZED_USERS = load_auth_users()
 
 # API Endpoints
 VEHICLE_API = "https://chuchirandiki.vercel.app/api/vehicle"
-SEARCH_API = "https://api.paanel.shop/api/gateway.php"
-SEARCH_API_KEY = "Seeker"
+LEAKOSINT_API = "https://raxxosint.onrender.com/leakosint"
+LEAKOSINT_KEY = "LOS-419781895057E3B0"
 SPINNY_URL = "https://api.spinny.com/v3/api/vehicle/full-pan-details/"
 UPI_API = "https://api.truebalance.cc/v2/v2/payment/validateVPA"
 SPINNY_AUTH_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgzNDM5MDY2LCJqdGkiOiIxOTUyOTJkNDdiNjE0M2M2YjExNGUyOWQwMjc1OTA1NSIsInVzZXJfaWQiOjI3ODQxMzg3fQ.uAQg937MTs_4Dz7rgGqX28xVX7liEx6jIm0-1SL2SNc"
@@ -86,6 +86,46 @@ FIELD_EMOJIS = {
     "email": "📧",
     "icic": "🏦",
     "msid": "📱",
+    "Phone": "📞",
+    "Phone2": "📱",
+    "Phone3": "📱",
+    "Phone4": "📱",
+    "Phone5": "📱",
+    "Phone6": "📱",
+    "Phone7": "📱",
+    "Phone8": "📱",
+    "FullName": "👤",
+    "FatherName": "👨‍👦",
+    "Adres": "📍",
+    "Adres2": "📍",
+    "Adres3": "📍",
+    "DocumentNumber": "🪪",
+    "Email": "📧",
+    "Region": "📡",
+    "City": "🏙️",
+    "State": "🗺️",
+    "PostalCode": "📮",
+    "Provider": "📡",
+    "MobileOperator": "📡",
+    "DateOfBirth": "🎂",
+    "Company": "🏢",
+    "Category": "📋",
+    "Type": "📋",
+    "Country": "🌍",
+    "IP": "🌐",
+    "RegistrationDate": "📅",
+    "TheDateOfTheEntrance": "📅",
+    "Name": "👤",
+    "Surname": "👤",
+    "Nick": "👤",
+    "Login": "🔑",
+    "Titul": "👤",
+    "EncryptedPassword": "🔒",
+    "CreditsInappPoints": "⭐",
+    "PinCode": "📮",
+    "Email2": "📧",
+    "IndianState": "🗺️",
+    "MobilePhone": "📞"
 }
 
 def generate_random_micr():
@@ -161,14 +201,14 @@ def escape_markdown(text):
     return text
 
 def sanitize_error_message(error_msg):
-    if SEARCH_API_KEY in error_msg:
-        error_msg = error_msg.replace(SEARCH_API_KEY, "[HIDDEN]")
+    if LEAKOSINT_KEY in error_msg:
+        error_msg = error_msg.replace(LEAKOSINT_KEY, "[HIDDEN]")
     
     api_patterns = [
         r'https://chuchirandiki\.vercel\.app[^\s]*',
         r'https://api\.spinny\.com[^\s]*',
         r'https://api\.truebalance\.cc[^\s]*',
-        r'https://api\.paanel\.shop[^\s]*',
+        r'https://raxxosint\.onrender\.com[^\s]*',
     ]
     for pattern in api_patterns:
         error_msg = re.sub(pattern, '[API_ENDPOINT]', error_msg)
@@ -241,11 +281,10 @@ def format_vehicle_data(data, registration_number):
 
     return result_text
 
-def format_search_data(data, query, search_type="number"):
+def format_leakosint_data(data, query, search_type="number"):
     """
-    Format data from the new API with emojis
-    Handles the exact response format: array of objects with fields:
-    NAME, fname, ADDRESS, MOBILE, alt, circle, id, email, data_id
+    Format data from the Leakosint API with emojis
+    Shows all data from all sources without developer name and source title
     """
     if search_type == "number":
         result_text = f"🔥 *Number Info Result*\n"
@@ -260,100 +299,117 @@ def format_search_data(data, query, search_type="number"):
         result_text += "❌ No information found for this query."
         return result_text
     
-    # Check if data is a list (array of results)
-    if isinstance(data, list):
-        # Process each record
+    # Check if we have data dictionary with sources
+    if isinstance(data, dict):
+        # Get all sources except we'll skip the developer field
+        sources = {k: v for k, v in data.items() if k not in ['developer', 'status', 'success', 'status_code', 'http_status', 'query']}
+        
+        record_count = 0
+        for source_name, source_data in sources.items():
+            if not isinstance(source_data, dict):
+                continue
+                
+            # Skip source title and description, just get records
+            records = source_data.get('records', [])
+            if not records:
+                continue
+                
+            for record in records:
+                record_count += 1
+                if record_count == 1:
+                    # No source header - just show data
+                    result_text += f"📂 *Record #{record_count}*\n"
+                else:
+                    result_text += f"\n📂 *Record #{record_count}*\n"
+                result_text += "─────────────────\n"
+                
+                # Define display names for fields
+                field_display = {
+                    "FullName": "Full Name",
+                    "Name": "Name",
+                    "Surname": "Surname",
+                    "FatherName": "Father's Name",
+                    "Phone": "Phone Number",
+                    "Phone2": "Phone 2",
+                    "Phone3": "Phone 3",
+                    "Phone4": "Phone 4",
+                    "Phone5": "Phone 5",
+                    "Phone6": "Phone 6",
+                    "Phone7": "Phone 7",
+                    "Phone8": "Phone 8",
+                    "MobilePhone": "Mobile Phone",
+                    "Email": "Email Address",
+                    "Email2": "Email 2",
+                    "Adres": "Address",
+                    "Adres2": "Address 2",
+                    "Adres3": "Address 3",
+                    "DocumentNumber": "Document Number",
+                    "Region": "Region",
+                    "City": "City",
+                    "State": "State",
+                    "IndianState": "State",
+                    "Country": "Country",
+                    "PostalCode": "Postal Code",
+                    "Provider": "Provider",
+                    "MobileOperator": "Mobile Operator",
+                    "DateOfBirth": "Date of Birth",
+                    "Company": "Company",
+                    "Category": "Category",
+                    "Type": "Type",
+                    "IP": "IP Address",
+                    "RegistrationDate": "Registration Date",
+                    "TheDateOfTheEntrance": "Last Login Date",
+                    "Nick": "Nickname",
+                    "Login": "Login ID",
+                    "Titul": "Title",
+                    "EncryptedPassword": "Encrypted Password",
+                    "CreditsInappPoints": "Points/Balance",
+                    "PinCode": "PIN Code",
+                    "Stat": "State"
+                }
+                
+                # Define field order for better readability
+                field_order = ["FullName", "Name", "Surname", "FatherName", "Phone", "Phone2", "Phone3", "Phone4", "Phone5", "Phone6", "Phone7", "Phone8", "MobilePhone", "Email", "Email2", "Adres", "Adres2", "Adres3", "DocumentNumber", "Region", "City", "State", "IndianState", "Country", "PostalCode", "Provider", "MobileOperator", "DateOfBirth", "Company", "Category", "Type", "IP", "RegistrationDate", "TheDateOfTheEntrance", "Nick", "Login", "Titul", "EncryptedPassword", "CreditsInappPoints", "PinCode", "Stat"]
+                
+                # Show fields in preferred order
+                for field in field_order:
+                    if field in record and record[field] and str(record[field]).strip() and str(record[field]).lower() != 'null':
+                        emoji = get_field_emoji(field)
+                        display_value = str(record[field])
+                        
+                        # Handle Aadhaar/Document masking for display if needed
+                        if field in ["DocumentNumber", "id"] and len(display_value) >= 12:
+                            # Don't mask completely, show full if available
+                            pass
+                        
+                        display_field = field_display.get(field, field.replace('_', ' ').title())
+                        result_text += f"{emoji} *{display_field}:* `{escape_markdown(display_value)}`\n"
+                
+                # Show any remaining fields
+                for key, value in record.items():
+                    if key not in field_order and key not in ['source', 'title', 'description'] and value and str(value).strip() and str(value).lower() != 'null':
+                        emoji = get_field_emoji(key)
+                        display_field = key.replace('_', ' ').title()
+                        result_text += f"{emoji} *{display_field}:* `{escape_markdown(str(value))}`\n"
+        
+        if record_count == 0:
+            result_text += "❌ No records found in any source."
+    
+    elif isinstance(data, list):
+        # Handle list of records directly
         for idx, record in enumerate(data, 1):
-            # Generate random ICIC and MSID for each record
-            record['icic'] = generate_random_icic()
-            record['msid'] = generate_random_msid()
-            
-            # Add record header
-            result_text += f"📂 *Record #{idx}*\n"
+            if idx == 1:
+                result_text += f"📂 *Record #{idx}*\n"
+            else:
+                result_text += f"\n📂 *Record #{idx}*\n"
             result_text += "─────────────────\n"
             
-            # Field display names mapping
-            field_display = {
-                "NAME": "Full Name",
-                "fname": "Father's Name",
-                "MOBILE": "Mobile Number",
-                "alt": "Alternate Mobile",
-                "ADDRESS": "Address",
-                "id": "Aadhaar Number",
-                "circle": "Operator/Circle",
-                "email": "Email",
-                "icic": "ICIC Code",
-                "msid": "MSID"
-            }
-            
-            # Define field order for better readability
-            field_order = ["NAME", "fname", "MOBILE", "alt", "ADDRESS", "id", "circle", "email", "icic", "msid"]
-            
-            # Show fields in preferred order
-            for field in field_order:
-                if field in record and record[field] and str(record[field]).strip() and str(record[field]).lower() != 'null':
-                    emoji = get_field_emoji(field)
-                    display_value = str(record[field])
-                    
-                    # Handle Aadhaar masking for display
-                    if field == "id" and len(display_value) == 12:
-                        display_value = f"********{display_value[-4:]}"
-                    
-                    display_field = field_display.get(field, field)
-                    result_text += f"{emoji} *{display_field}:* `{escape_markdown(display_value)}`\n"
-            
-            # Show any remaining fields (excluding data_id which we want to hide)
             for key, value in record.items():
-                if key not in field_order and key != "data_id" and value and str(value).strip() and str(value).lower() != 'null':
+                if value and str(value).strip() and str(value).lower() != 'null':
                     emoji = get_field_emoji(key)
                     display_field = key.replace('_', ' ').title()
                     result_text += f"{emoji} *{display_field}:* `{escape_markdown(str(value))}`\n"
-            
-            result_text += "\n"
     
-    elif isinstance(data, dict):
-        # Single result
-        # Generate random ICIC and MSID
-        data['icic'] = generate_random_icic()
-        data['msid'] = generate_random_msid()
-        
-        result_text += f"📂 *Result*\n"
-        result_text += "─────────────────\n"
-        
-        field_display = {
-            "NAME": "Full Name",
-            "fname": "Father's Name",
-            "MOBILE": "Mobile Number",
-            "alt": "Alternate Mobile",
-            "ADDRESS": "Address",
-            "id": "Aadhaar Number",
-            "circle": "Operator/Circle",
-            "email": "Email",
-            "icic": "ICIC Code",
-            "msid": "MSID"
-        }
-        
-        field_order = ["NAME", "fname", "MOBILE", "alt", "ADDRESS", "id", "circle", "email", "icic", "msid"]
-        
-        for field in field_order:
-            if field in data and data[field] and str(data[field]).strip() and str(data[field]).lower() != 'null':
-                emoji = get_field_emoji(field)
-                display_value = str(data[field])
-                
-                if field == "id" and len(display_value) == 12:
-                    display_value = f"********{display_value[-4:]}"
-                
-                display_field = field_display.get(field, field)
-                result_text += f"{emoji} *{display_field}:* `{escape_markdown(display_value)}`\n"
-        
-        # Show remaining fields (excluding data_id which we want to hide)
-        for key, value in data.items():
-            if key not in field_order and key != "data_id" and value and str(value).strip() and str(value).lower() != 'null':
-                emoji = get_field_emoji(key)
-                display_field = key.replace('_', ' ').title()
-                result_text += f"{emoji} *{display_field}:* `{escape_markdown(str(value))}`\n"
-        
-        result_text += "\n"
     else:
         result_text += "❌ Unexpected response format from API."
     
@@ -504,17 +560,16 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         params = {
-            "key": SEARCH_API_KEY,
-            "number": number
+            "key": LEAKOSINT_KEY,
+            "quiry": f"+91{number}"
         }
-        response = session.get(SEARCH_API, params=params, timeout=90)
+        response = session.get(LEAKOSINT_API, params=params, timeout=90)
         
         if response.status_code == 200:
             data = response.json()
             
-            # The API returns data directly as an array
-            if isinstance(data, list) and len(data) > 0:
-                result_text = format_search_data(data, display_query, "number")
+            if data.get('success') and data.get('data'):
+                result_text = format_leakosint_data(data.get('data'), display_query, "number")
             else:
                 result_text = f"🔥 *Number Info Result*\n"
                 result_text += f"📱 Number: `{display_query}`\n"
@@ -570,16 +625,16 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         params = {
-            "key": SEARCH_API_KEY,
-            "number": aadhaar_number
+            "key": LEAKOSINT_KEY,
+            "quiry": aadhaar_number
         }
-        response = session.get(SEARCH_API, params=params, timeout=90)
+        response = session.get(LEAKOSINT_API, params=params, timeout=90)
         
         if response.status_code == 200:
             data = response.json()
             
-            if isinstance(data, list) and len(data) > 0:
-                result_text = format_search_data(data, display_query, "aadhar")
+            if data.get('success') and data.get('data'):
+                result_text = format_leakosint_data(data.get('data'), display_query, "aadhar")
             else:
                 result_text = f"🔥 *Aadhaar Info Result*\n"
                 result_text += f"🪪 Aadhaar: `{display_query}`\n"
@@ -780,16 +835,15 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "*Usage:*\n"
             "`/num 8810590661`\n"
             "`/num +918810590661`\n\n"
-            "*Returns:*\n"
-            "👤 Full Name\n"
-            "👨‍👦 Father's Name\n"
-            "📞 Mobile Number\n"
-            "📱 Alternate Mobile\n"
-            "📍 Address\n"
-            "🪪 Aadhaar Number\n"
-            "📡 Operator/Circle\n"
-            "🏦 ICIC Code\n"
-            "📱 MSID",
+            "*Returns comprehensive data from multiple sources:*\n"
+            "• Full Name & Father's Name\n"
+            "• Phone numbers (up to 8)\n"
+            "• Addresses & Email\n"
+            "• Document Numbers\n"
+            "• Region & City\n"
+            "• Provider & Operator\n"
+            "• Company & Category\n"
+            "• Date of Birth & More",
             parse_mode='Markdown'
         )
     elif data == "menu_aadhar":
@@ -799,16 +853,15 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "*Usage:*\n"
             "`/aadhar 691631435425`\n\n"
             "*Note:* Aadhaar must be exactly 12 digits.\n\n"
-            "*Returns:*\n"
-            "👤 Full Name\n"
-            "👨‍👦 Father's Name\n"
-            "📞 Mobile Number\n"
-            "📱 Alternate Mobile\n"
-            "📍 Address\n"
-            "🪪 Aadhaar Number (Masked)\n"
-            "📡 Operator/Circle\n"
-            "🏦 ICIC Code\n"
-            "📱 MSID",
+            "*Returns comprehensive data from multiple sources:*\n"
+            "• Full Name & Father's Name\n"
+            "• Phone numbers (up to 8)\n"
+            "• Addresses & Email\n"
+            "• Document Numbers\n"
+            "• Region & City\n"
+            "• Provider & Operator\n"
+            "• Company & Category\n"
+            "• Date of Birth & More",
             parse_mode='Markdown'
         )
     elif data == "menu_pan":
@@ -830,8 +883,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *Available Commands:*
 
 🚗 `/vehicle` - Full vehicle search
-📱 `/num` - Mobile number details
-🪪 `/aadhar` - Aadhaar number details
+📱 `/num` - Mobile number details (Leakosint API)
+🪪 `/aadhar` - Aadhaar number details (Leakosint API)
 📇 `/pan` - PAN card details
 💳 `/upi` - Validate UPI ID
 
@@ -839,22 +892,22 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 *Examples:*
 `/vehicle MH47BG7036`
-`/num 8810590661` - Mobile details
+`/num +919873534030` - Mobile details
 `/aadhar 691631435425` - Aadhaar details
 `/pan ACCPA2495F`
 `/upi vipansharma1931141@okhdfcbank`
 
 ━━━━━━━━━━━━━━━━━━━━━━━
 
+*About Mobile & Aadhaar Search:*
+• Uses Leakosint API for comprehensive data
+• Returns data from multiple sources
+• Shows all records with complete details
+• Fields include: Name, Father's Name, Multiple Phone Numbers, Addresses, Email, Document Numbers, Region, City, State, Provider, Company, Date of Birth, and more
+
 *About Vehicle Search:*
 • `/vehicle` - Search by registration number
 • Returns: Registration Status, Vehicle Specs, Address, Insurance, Additional Details
-
-*About Aadhaar & Mobile Search:*
-• Uses API: https://api.paanel.shop/api/gateway.php
-• `/num` - Search by 10-digit mobile number
-• `/aadhar` - Search by 12-digit Aadhaar number
-• Returns: Name, Father's Name, Phone numbers, Address, Aadhaar, Operator/Circle, ICIC Code, MSID
 
 *About PAN Search:*
 • `/pan` - Search by PAN number
@@ -902,13 +955,13 @@ def main():
     print("   - API: https://chuchirandiki.vercel.app/api/vehicle?reg_no=XXXXXXXXXX")
     print("   - Usage: /vehicle MH47BG7036")
     print("\n📱 Mobile Search:")
-    print("   - API: https://api.paanel.shop/api/gateway.php?key=Seeker&number=7574995105")
-    print("   - Usage: /num 8810590661")
-    print("   - Returns: Name, Father's Name, Mobile, Alternate Mobile, Address, Aadhaar, Operator, ICIC, MSID")
+    print("   - API: https://raxxosint.onrender.com/leakosint?key=LOS-419781895057E3B0&quiry=+919873534030")
+    print("   - Usage: /num +919873534030")
+    print("   - Returns: Complete data from all sources")
     print("\n🪪 Aadhaar Search:")
-    print("   - API: https://api.paanel.shop/api/gateway.php?key=Seeker&number=691631435425")
+    print("   - API: https://raxxosint.onrender.com/leakosint?key=LOS-419781895057E3B0&quiry=691631435425")
     print("   - Usage: /aadhar 691631435425")
-    print("   - Returns: Name, Father's Name, Mobile, Alternate Mobile, Address, Aadhaar, Operator, ICIC, MSID")
+    print("   - Returns: Complete data from all sources")
     print("\n📇 PAN Search:")
     print("   - Usage: /pan ACCPA2495F")
     print("\n💳 UPI Validation:")

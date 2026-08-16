@@ -288,11 +288,12 @@ def format_vehicle_data(data, registration_number):
     return result_text
 
 def format_paanel_data(data, query, search_type="number"):
+    """Format data from Paanel API - Shows ALL fields from ALL records"""
     if search_type == "number":
-        result_text = f"🔥 *Number Info Result (Paanel)*\n"
+        result_text = f"🔥 *NUMBER INFO (PAANEL)*\n"
         result_text += f"📱 Number: `{query}`\n"
     else:
-        result_text = f"🔥 *Aadhaar Info Result (Paanel)*\n"
+        result_text = f"🔥 *AADHAAR INFO (PAANEL)*\n"
         result_text += f"🪪 Aadhaar: `{query}`\n"
     result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
 
@@ -300,62 +301,47 @@ def format_paanel_data(data, query, search_type="number"):
         result_text += "❌ No information found for this query."
         return result_text
 
+    # Handle both list and dict responses
     records = data if isinstance(data, list) else [data]
     record_count = 0
+    
     for record in records:
-        if not record:
+        if not record or not isinstance(record, dict):
             continue
+            
         record_count += 1
-        filtered_record = {k: v for k, v in record.items() if v and str(v).strip() and str(v).lower() != 'null'}
-
-        if not filtered_record:
-            continue
-
-        result_text += f"📂 *Record #{record_count}*\n"
+        result_text += f"📂 *RECORD #{record_count}*\n"
         result_text += "─────────────────\n"
-
-        field_display = {
-            "NAME": "Name",
-            "fname": "Father's Name",
-            "ADDRESS": "Address",
-            "aadhar": "Aadhaar Number",
-            "alt": "Alternate Phone",
-            "circle": "Circle/Region",
-            "email": "Email",
-            "num": "Phone Number",
-        }
-        field_order = ["NAME", "fname", "ADDRESS", "aadhar", "num", "alt", "circle", "email"]
-
-        for field in field_order:
-            if field in filtered_record:
-                emoji = get_field_emoji(field)
-                display_value = str(filtered_record[field])
-                display_field = field_display.get(field, field.replace('_', ' ').title())
-                if field == "ADDRESS":
-                    display_value = display_value.replace('!', '\n├ ')
-                    result_text += f"{emoji} *{display_field}:*\n├ {escape_markdown(display_value)}\n"
-                else:
-                    result_text += f"{emoji} *{display_field}:* `{escape_markdown(display_value)}`\n"
-
-        for key, value in filtered_record.items():
-            if key not in field_order and key not in ['source', 'title', 'description']:
+        
+        # Show ALL fields from the record
+        for key, value in record.items():
+            if value and str(value).strip() and str(value).lower() != 'null':
                 emoji = get_field_emoji(key)
-                display_field = key.replace('_', ' ').title()
-                result_text += f"{emoji} *{display_field}:* `{escape_markdown(str(value))}`\n"
-
+                display_value = str(value)
+                
+                # Special formatting for address
+                if key == "ADDRESS":
+                    display_value = display_value.replace('!', '\n├ ')
+                    result_text += f"{emoji} *{key}:*\n├ {escape_markdown(display_value)}\n"
+                else:
+                    result_text += f"{emoji} *{key}:* `{escape_markdown(display_value)}`\n"
+        
         result_text += "\n"
-
+    
     if record_count == 0:
         result_text += "❌ No valid records found in the response."
+    else:
+        result_text += f"\n📊 *Total Records Found:* {record_count}"
 
     return result_text.rstrip()
 
 def format_leakosint_data(data, query, search_type="number"):
+    """Format data from Leakosint API - Shows ALL fields from ALL sources"""
     if search_type == "number":
-        result_text = f"🔥 *Number Info Result*\n"
+        result_text = f"🔥 *NUMBER INFO (LEAKOSINT)*\n"
         result_text += f"📱 Number: `{query}`\n"
     else:
-        result_text = f"🔥 *Aadhaar Info Result*\n"
+        result_text = f"🔥 *AADHAAR INFO (LEAKOSINT)*\n"
         result_text += f"🪪 Aadhaar: `{query}`\n"
     
     result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -365,11 +351,13 @@ def format_leakosint_data(data, query, search_type="number"):
         return result_text
     
     if isinstance(data, dict):
+        # Get all sources except metadata
         sources = {k: v for k, v in data.items() if k not in ['developer', 'status', 'success', 'status_code', 'http_status', 'query']}
         
         record_count = 0
         total_records = 0
         
+        # Count total records first
         for source_name, source_data in sources.items():
             if isinstance(source_data, dict) and 'records' in source_data:
                 records = source_data.get('records', [])
@@ -380,74 +368,23 @@ def format_leakosint_data(data, query, search_type="number"):
             result_text += "❌ No records found in any source."
             return result_text
         
+        # Display all records from all sources
         for source_name, source_data in sources.items():
             if not isinstance(source_data, dict):
                 continue
-                
+            
             records = source_data.get('records', [])
             if not records:
                 continue
-                
+            
             for record in records:
                 record_count += 1
-                result_text += f"📂 *Record #{record_count}*\n"
+                result_text += f"📂 *RECORD #{record_count} (Source: {source_name})*\n"
                 result_text += "─────────────────\n"
                 
-                field_display = {
-                    "FullName": "Full Name",
-                    "Name": "Name",
-                    "Surname": "Surname",
-                    "FatherName": "Father's Name",
-                    "Phone": "Phone Number",
-                    "Phone2": "Phone 2",
-                    "Phone3": "Phone 3",
-                    "Phone4": "Phone 4",
-                    "Phone5": "Phone 5",
-                    "Phone6": "Phone 6",
-                    "Phone7": "Phone 7",
-                    "Phone8": "Phone 8",
-                    "MobilePhone": "Mobile Phone",
-                    "Email": "Email Address",
-                    "Email2": "Email 2",
-                    "Adres": "Address",
-                    "Adres2": "Address 2",
-                    "Adres3": "Address 3",
-                    "DocumentNumber": "Document Number",
-                    "Region": "Region",
-                    "City": "City",
-                    "Stat": "State",
-                    "State": "State",
-                    "IndianState": "State",
-                    "Country": "Country",
-                    "PostalCode": "Postal Code",
-                    "Provider": "Provider",
-                    "MobileOperator": "Mobile Operator",
-                    "DateOfBirth": "Date of Birth",
-                    "Company": "Company",
-                    "Category": "Category",
-                    "Type": "Type",
-                    "IP": "IP Address",
-                    "RegistrationDate": "Registration Date",
-                    "TheDateOfTheEntrance": "Last Login Date",
-                    "Nick": "Nickname",
-                    "Login": "Login ID",
-                    "Titul": "Title",
-                    "EncryptedPassword": "Encrypted Password",
-                    "CreditsInappPoints": "Points/Balance",
-                    "PinCode": "PIN Code",
-                }
-                
-                field_order = ["FullName", "Name", "Surname", "FatherName", "Phone", "Phone2", "Phone3", "Phone4", "Phone5", "Phone6", "Phone7", "Phone8", "MobilePhone", "Email", "Email2", "Adres", "Adres2", "Adres3", "DocumentNumber", "Region", "City", "Stat", "State", "IndianState", "Country", "PostalCode", "Provider", "MobileOperator", "DateOfBirth", "Company", "Category", "Type", "IP", "RegistrationDate", "TheDateOfTheEntrance", "Nick", "Login", "Titul", "EncryptedPassword", "CreditsInappPoints", "PinCode"]
-                
-                for field in field_order:
-                    if field in record and record[field] and str(record[field]).strip() and str(record[field]).lower() != 'null':
-                        emoji = get_field_emoji(field)
-                        display_value = str(record[field])
-                        display_field = field_display.get(field, field.replace('_', ' ').title())
-                        result_text += f"{emoji} *{display_field}:* `{escape_markdown(display_value)}`\n"
-                
+                # Show ALL fields from the record
                 for key, value in record.items():
-                    if key not in field_order and key not in ['source', 'title', 'description'] and value and str(value).strip() and str(value).lower() != 'null':
+                    if value and str(value).strip() and str(value).lower() != 'null':
                         emoji = get_field_emoji(key)
                         display_field = key.replace('_', ' ').title()
                         result_text += f"{emoji} *{display_field}:* `{escape_markdown(str(value))}`\n"
@@ -456,13 +393,12 @@ def format_leakosint_data(data, query, search_type="number"):
         
         if record_count == 0:
             result_text += "❌ No records found in any source."
+        else:
+            result_text += f"\n📊 *Total Records Found:* {record_count}"
     
     elif isinstance(data, list):
         for idx, record in enumerate(data, 1):
-            if idx == 1:
-                result_text += f"📂 *Record #{idx}*\n"
-            else:
-                result_text += f"\n📂 *Record #{idx}*\n"
+            result_text += f"📂 *RECORD #{idx}*\n"
             result_text += "─────────────────\n"
             
             for key, value in record.items():
@@ -471,6 +407,8 @@ def format_leakosint_data(data, query, search_type="number"):
                     display_field = key.replace('_', ' ').title()
                     result_text += f"{emoji} *{display_field}:* `{escape_markdown(str(value))}`\n"
             result_text += "\n"
+        
+        result_text += f"\n📊 *Total Records Found:* {len(data)}"
     
     else:
         result_text += "❌ Unexpected response format from API."
@@ -628,9 +566,14 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "key": NEW_API_KEY,
             "number": number
         }
+        logger.info(f"Calling Paanel API for number: {number}")
         response = session.get(NEW_API_URL, params=new_params, timeout=30)
+        logger.info(f"Paanel API Response Status: {response.status_code}")
+        
         if response.status_code == 200:
             data = response.json()
+            logger.info(f"Paanel API Response Data: {json.dumps(data)[:500]}")  # Log first 500 chars
+            
             if isinstance(data, list) and data:
                 new_api_success = True
                 new_api_response_data = data
@@ -638,11 +581,11 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 new_api_success = True
                 new_api_response_data = [data]
             else:
-                logger.info(f"New API returned empty or invalid response: {data}")
+                logger.info(f"Paanel API returned empty or invalid response: {data}")
         else:
-            logger.warning(f"New API request failed with status: {response.status_code}")
+            logger.warning(f"Paanel API request failed with status: {response.status_code}")
     except Exception as e:
-        logger.error(f"Error calling New API: {e}")
+        logger.error(f"Error calling Paanel API: {e}")
 
     if new_api_success and new_api_response_data:
         result_text = format_paanel_data(new_api_response_data, display_query, "number")
@@ -720,7 +663,7 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
     
-    # Try New API (Paanel) first
+    # Try New API (Paanel) first - Use aadhar number as 'number' parameter
     new_api_success = False
     new_api_response_data = None
     try:
@@ -728,21 +671,38 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "key": NEW_API_KEY,
             "number": aadhaar_number
         }
+        logger.info(f"Calling Paanel API for Aadhaar: {aadhaar_number}")
         response = session.get(NEW_API_URL, params=new_params, timeout=30)
+        logger.info(f"Paanel API Response Status for Aadhaar: {response.status_code}")
+        
         if response.status_code == 200:
             data = response.json()
-            if isinstance(data, list) and data:
+            logger.info(f"Paanel API Response Data for Aadhaar: {json.dumps(data)[:500]}")  # Log first 500 chars
+            
+            # Check if the response contains aadhar field in any record
+            records = data if isinstance(data, list) else [data] if isinstance(data, dict) else []
+            aadhar_found = False
+            
+            for record in records:
+                if isinstance(record, dict):
+                    # Check if any field contains the aadhaar number (partial match)
+                    for key, value in record.items():
+                        if value and str(aadhaar_number) in str(value):
+                            aadhar_found = True
+                            break
+                    if aadhar_found:
+                        break
+            
+            if aadhar_found and records:
                 new_api_success = True
-                new_api_response_data = data
-            elif isinstance(data, dict) and data:
-                new_api_success = True
-                new_api_response_data = [data]
+                new_api_response_data = records
+                logger.info(f"Aadhaar found in Paanel API response")
             else:
-                logger.info(f"New API returned empty or invalid response for Aadhaar: {data}")
+                logger.info(f"Aadhaar not found in Paanel API response")
         else:
-            logger.warning(f"New API request for Aadhaar failed with status: {response.status_code}")
+            logger.warning(f"Paanel API request for Aadhaar failed with status: {response.status_code}")
     except Exception as e:
-        logger.error(f"Error calling New API for Aadhaar: {e}")
+        logger.error(f"Error calling Paanel API for Aadhaar: {e}")
 
     if new_api_success and new_api_response_data:
         result_text = format_paanel_data(new_api_response_data, display_query, "aadhar")
@@ -1015,8 +975,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *Available Commands:*
 
 🚗 `/vehicle` - Full vehicle search
-📱 `/num` - Mobile number details (Leakosint API)
-🪪 `/aadhar` - Aadhaar number details (Leakosint API)
+📱 `/num` - Mobile number details (Paanel API + Leakosint Fallback)
+🪪 `/aadhar` - Aadhaar number details (Paanel API + Leakosint Fallback)
 📇 `/pan` - PAN card details
 💳 `/upi` - Validate UPI ID
 
@@ -1032,10 +992,17 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ━━━━━━━━━━━━━━━━━━━━━━━
 
 *About Mobile & Aadhaar Search:*
-• Uses Leakosint API for comprehensive data
-• Returns data from multiple sources
-• Shows all records with complete details
-• Fields include: Name, Father's Name, Multiple Phone Numbers, Addresses, Email, Document Numbers, Region, City, State, Provider, Company, Date of Birth, and more
+• Primary API: Paanel API (https://api.paanel.shop)
+• Fallback API: Leakosint API
+• Shows ALL fields from ALL records
+• Returns comprehensive data including:
+  • Full Name & Father's Name
+  • Multiple Phone Numbers
+  • Complete Address with details
+  • Aadhaar Number
+  • Email Addresses
+  • Circle/Region Information
+  • And more...
 
 *About Vehicle Search:*
 • `/vehicle` - Search by registration number
@@ -1090,12 +1057,12 @@ def main():
     print("   - API (Primary): https://api.paanel.shop/api/gateway.php?key=Seeker&number=XXXXXXXXXX")
     print("   - API (Fallback): https://raxxosint.onrender.com/leakosint?key=LOS-419781895057E3B0&quiry=+919873534030")
     print("   - Usage: /num +919873534030")
-    print("   - Returns: Complete data from all sources")
+    print("   - Shows: ALL fields from ALL records")
     print("\n🪪 Aadhaar Search:")
     print("   - API (Primary): https://api.paanel.shop/api/gateway.php?key=Seeker&number=XXXXXXXXXX")
     print("   - API (Fallback): https://raxxosint.onrender.com/leakosint?key=LOS-419781895057E3B0&quiry=691631435425")
     print("   - Usage: /aadhar 691631435425")
-    print("   - Returns: Complete data from all sources")
+    print("   - Shows: ALL fields from ALL records")
     print("\n📇 PAN Search:")
     print("   - Usage: /pan ACCPA2495F")
     print("\n💳 UPI Validation:")

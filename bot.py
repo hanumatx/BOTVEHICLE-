@@ -301,10 +301,38 @@ def format_paanel_data(data, query, search_type="number"):
         result_text += "❌ No information found for this query."
         return result_text
 
-    # Handle both list and dict responses
-    records = data if isinstance(data, list) else [data]
-    record_count = 0
+    # Handle different response structures
+    records = []
     
+    # Case 1: Direct array response
+    if isinstance(data, list):
+        records = data
+    # Case 2: Response with 'data' field containing sources
+    elif isinstance(data, dict):
+        if 'data' in data:
+            sources = data['data']
+            # Iterate through all sources and collect records
+            if isinstance(sources, dict):
+                for source_name, source_data in sources.items():
+                    if isinstance(source_data, dict) and 'records' in source_data:
+                        source_records = source_data.get('records', [])
+                        if source_records:
+                            # Add source name to each record for identification
+                            for record in source_records:
+                                if isinstance(record, dict):
+                                    record['_source'] = source_name
+                            records.extend(source_records)
+            elif isinstance(sources, list):
+                records = sources
+        else:
+            # Check if data itself is a record
+            records = [data]
+    
+    if not records:
+        result_text += "❌ No valid records found in the response."
+        return result_text
+
+    record_count = 0
     for record in records:
         if not record or not isinstance(record, dict):
             continue
@@ -313,18 +341,71 @@ def format_paanel_data(data, query, search_type="number"):
         result_text += f"📂 *RECORD #{record_count}*\n"
         result_text += "─────────────────\n"
         
+        # Show source if available
+        if '_source' in record:
+            result_text += f"📡 *Source:* `{escape_markdown(record['_source'])}`\n"
+            # Remove _source from display
+            del record['_source']
+        
         # Show ALL fields from the record
-        for key, value in record.items():
+        # Define field display names for better readability
+        field_display = {
+            "FullName": "👤 Full Name",
+            "FatherName": "👨‍👦 Father's Name",
+            "Email": "📧 Email",
+            "Phone": "📞 Phone",
+            "Phone2": "📞 Phone 2",
+            "Phone3": "📞 Phone 3",
+            "Phone4": "📞 Phone 4",
+            "Phone5": "📞 Phone 5",
+            "Phone6": "📞 Phone 6",
+            "Phone7": "📞 Phone 7",
+            "Phone8": "📞 Phone 8",
+            "Adres": "📍 Address",
+            "Adres2": "📍 Address 2",
+            "Adres3": "📍 Address 3",
+            "DocumentNumber": "🪪 Document Number",
+            "Region": "📡 Region",
+            "Provider": "📡 Provider",
+            "City": "🏙️ City",
+            "State": "🗺️ State",
+            "Country": "🌍 Country",
+            "PostalCode": "📮 Postal Code",
+            "DateOfBirth": "🎂 Date of Birth",
+            "Company": "🏢 Company",
+            "Category": "📋 Category",
+            "Type": "📋 Type",
+            "IP": "🌐 IP Address",
+            "RegistrationDate": "📅 Registration Date",
+            "NAME": "👤 Name",
+            "fname": "👨‍👦 Father's Name",
+            "ADDRESS": "📍 Address",
+            "aadhar": "🪪 Aadhaar",
+            "alt": "📱 Alternate Phone",
+            "circle": "📡 Circle",
+            "email": "📧 Email",
+            "num": "📞 Number",
+            "Nick": "👤 Nickname",
+            "Login": "🔑 Login ID",
+            "Titul": "👤 Title",
+            "EncryptedPassword": "🔒 Password",
+            "CreditsInappPoints": "⭐ Points"
+        }
+        
+        # Sort fields for better display
+        sorted_fields = sorted(record.items())
+        for key, value in sorted_fields:
             if value and str(value).strip() and str(value).lower() != 'null':
                 emoji = get_field_emoji(key)
+                display_key = field_display.get(key, key.replace('_', ' ').title())
                 display_value = str(value)
                 
                 # Special formatting for address
-                if key == "ADDRESS":
+                if key in ["Adres", "Adres2", "Adres3", "ADDRESS"]:
                     display_value = display_value.replace('!', '\n├ ')
-                    result_text += f"{emoji} *{key}:*\n├ {escape_markdown(display_value)}\n"
+                    result_text += f"{emoji} *{display_key}:*\n├ {escape_markdown(display_value)}\n"
                 else:
-                    result_text += f"{emoji} *{key}:* `{escape_markdown(display_value)}`\n"
+                    result_text += f"{emoji} *{display_key}:* `{escape_markdown(display_value)}`\n"
         
         result_text += "\n"
     
@@ -572,14 +653,12 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if response.status_code == 200:
             data = response.json()
-            logger.info(f"Paanel API Response Data: {json.dumps(data)[:500]}")  # Log first 500 chars
+            logger.info(f"Paanel API Response Data: {json.dumps(data)[:500]}")
             
-            if isinstance(data, list) and data:
+            # Check if we have valid data
+            if data and (isinstance(data, list) or isinstance(data, dict)):
                 new_api_success = True
                 new_api_response_data = data
-            elif isinstance(data, dict) and data:
-                new_api_success = True
-                new_api_response_data = [data]
             else:
                 logger.info(f"Paanel API returned empty or invalid response: {data}")
         else:
@@ -663,7 +742,7 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
     
-    # Try New API (Paanel) first - Use aadhar number as 'number' parameter
+    # Try New API (Paanel) first
     new_api_success = False
     new_api_response_data = None
     try:
@@ -677,32 +756,37 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if response.status_code == 200:
             data = response.json()
-            logger.info(f"Paanel API Response Data for Aadhaar: {json.dumps(data)[:500]}")  # Log first 500 chars
+            logger.info(f"Paanel API Response Data for Aadhaar: {json.dumps(data)[:500]}")
             
-            # Check if the response contains aadhar field in any record
-            records = data if isinstance(data, list) else [data] if isinstance(data, dict) else []
-            aadhar_found = False
-            
-            for record in records:
-                if isinstance(record, dict):
-                    # Check if any field contains the aadhaar number (partial match)
-                    for key, value in record.items():
-                        if value and str(aadhaar_number) in str(value):
-                            aadhar_found = True
-                            break
+            # Check if we have valid data with Aadhaar
+            if data and (isinstance(data, list) or isinstance(data, dict)):
+                # Verify Aadhaar exists in the response
+                aadhar_found = False
+                
+                # Convert to list for processing
+                records = data if isinstance(data, list) else [data]
+                for record in records:
+                    if isinstance(record, dict):
+                        # Check all fields for Aadhaar
+                        for key, value in record.items():
+                            if value and str(aadhaar_number) in str(value):
+                                aadhar_found = True
+                                break
                     if aadhar_found:
                         break
-            
-            if aadhar_found and records:
-                new_api_success = True
-                new_api_response_data = records
-                logger.info(f"Aadhaar found in Paanel API response")
+                
+                if aadhar_found:
+                    new_api_success = True
+                    new_api_response_data = data
+                    logger.info("Aadhaar found in Paanel API response")
+                else:
+                    logger.info("Aadhaar not found in Paanel API response")
             else:
-                logger.info(f"Aadhaar not found in Paanel API response")
+                logger.info(f"Paanel API returned empty or invalid response: {data}")
         else:
-            logger.warning(f"Paanel API request for Aadhaar failed with status: {response.status_code}")
+            logger.warning(f"Paanel API request failed with status: {response.status_code}")
     except Exception as e:
-        logger.error(f"Error calling Paanel API for Aadhaar: {e}")
+        logger.error(f"Error calling Paanel API: {e}")
 
     if new_api_success and new_api_response_data:
         result_text = format_paanel_data(new_api_response_data, display_query, "aadhar")

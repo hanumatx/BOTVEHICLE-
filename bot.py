@@ -301,32 +301,8 @@ def format_paanel_data(data, query, search_type="number"):
         result_text += "❌ No information found for this query."
         return result_text
 
-    # Handle different response structures
-    records = []
-    
-    # Case 1: Direct array response
-    if isinstance(data, list):
-        records = data
-    # Case 2: Response with 'data' field containing sources
-    elif isinstance(data, dict):
-        if 'data' in data:
-            sources = data['data']
-            # Iterate through all sources and collect records
-            if isinstance(sources, dict):
-                for source_name, source_data in sources.items():
-                    if isinstance(source_data, dict) and 'records' in source_data:
-                        source_records = source_data.get('records', [])
-                        if source_records:
-                            # Add source name to each record for identification
-                            for record in source_records:
-                                if isinstance(record, dict):
-                                    record['_source'] = source_name
-                            records.extend(source_records)
-            elif isinstance(sources, list):
-                records = sources
-        else:
-            # Check if data itself is a record
-            records = [data]
+    # Handle response as direct array
+    records = data if isinstance(data, list) else [data] if isinstance(data, dict) else []
     
     if not records:
         result_text += "❌ No valid records found in the response."
@@ -341,55 +317,17 @@ def format_paanel_data(data, query, search_type="number"):
         result_text += f"📂 *RECORD #{record_count}*\n"
         result_text += "─────────────────\n"
         
-        # Show source if available
-        if '_source' in record:
-            result_text += f"📡 *Source:* `{escape_markdown(record['_source'])}`\n"
-            # Remove _source from display
-            del record['_source']
-        
         # Show ALL fields from the record
         # Define field display names for better readability
         field_display = {
-            "FullName": "👤 Full Name",
-            "FatherName": "👨‍👦 Father's Name",
-            "Email": "📧 Email",
-            "Phone": "📞 Phone",
-            "Phone2": "📞 Phone 2",
-            "Phone3": "📞 Phone 3",
-            "Phone4": "📞 Phone 4",
-            "Phone5": "📞 Phone 5",
-            "Phone6": "📞 Phone 6",
-            "Phone7": "📞 Phone 7",
-            "Phone8": "📞 Phone 8",
-            "Adres": "📍 Address",
-            "Adres2": "📍 Address 2",
-            "Adres3": "📍 Address 3",
-            "DocumentNumber": "🪪 Document Number",
-            "Region": "📡 Region",
-            "Provider": "📡 Provider",
-            "City": "🏙️ City",
-            "State": "🗺️ State",
-            "Country": "🌍 Country",
-            "PostalCode": "📮 Postal Code",
-            "DateOfBirth": "🎂 Date of Birth",
-            "Company": "🏢 Company",
-            "Category": "📋 Category",
-            "Type": "📋 Type",
-            "IP": "🌐 IP Address",
-            "RegistrationDate": "📅 Registration Date",
             "NAME": "👤 Name",
             "fname": "👨‍👦 Father's Name",
             "ADDRESS": "📍 Address",
-            "aadhar": "🪪 Aadhaar",
+            "aadhar": "🪪 Aadhaar Number",
             "alt": "📱 Alternate Phone",
-            "circle": "📡 Circle",
+            "circle": "📡 Circle/Region",
             "email": "📧 Email",
-            "num": "📞 Number",
-            "Nick": "👤 Nickname",
-            "Login": "🔑 Login ID",
-            "Titul": "👤 Title",
-            "EncryptedPassword": "🔒 Password",
-            "CreditsInappPoints": "⭐ Points"
+            "num": "📞 Phone Number",
         }
         
         # Sort fields for better display
@@ -401,8 +339,11 @@ def format_paanel_data(data, query, search_type="number"):
                 display_value = str(value)
                 
                 # Special formatting for address
-                if key in ["Adres", "Adres2", "Adres3", "ADDRESS"]:
+                if key == "ADDRESS":
+                    # Clean up address formatting
                     display_value = display_value.replace('!', '\n├ ')
+                    # Also handle other separators
+                    display_value = display_value.replace('  ', ' ')
                     result_text += f"{emoji} *{display_key}:*\n├ {escape_markdown(display_value)}\n"
                 else:
                     result_text += f"{emoji} *{display_key}:* `{escape_markdown(display_value)}`\n"
@@ -639,7 +580,7 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
     
-    # Try New API (Paanel) first
+    # Try New API (Paanel) with number parameter
     new_api_success = False
     new_api_response_data = None
     try:
@@ -742,15 +683,15 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
     
-    # Try New API (Paanel) first
+    # Try New API (Paanel) with aadhar parameter (CORRECT)
     new_api_success = False
     new_api_response_data = None
     try:
         new_params = {
             "key": NEW_API_KEY,
-            "number": aadhaar_number
+            "aadhar": aadhaar_number  # Using 'aadhar' parameter instead of 'number'
         }
-        logger.info(f"Calling Paanel API for Aadhaar: {aadhaar_number}")
+        logger.info(f"Calling Paanel API for Aadhaar with aadhar param: {aadhaar_number}")
         response = session.get(NEW_API_URL, params=new_params, timeout=30)
         logger.info(f"Paanel API Response Status for Aadhaar: {response.status_code}")
         
@@ -758,13 +699,12 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             data = response.json()
             logger.info(f"Paanel API Response Data for Aadhaar: {json.dumps(data)[:500]}")
             
-            # Check if we have valid data with Aadhaar
+            # Check if we have valid data
             if data and (isinstance(data, list) or isinstance(data, dict)):
                 # Verify Aadhaar exists in the response
                 aadhar_found = False
+                records = data if isinstance(data, list) else [data] if isinstance(data, dict) else []
                 
-                # Convert to list for processing
-                records = data if isinstance(data, list) else [data]
                 for record in records:
                     if isinstance(record, dict):
                         # Check all fields for Aadhaar
@@ -787,6 +727,41 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.warning(f"Paanel API request failed with status: {response.status_code}")
     except Exception as e:
         logger.error(f"Error calling Paanel API: {e}")
+
+    # If first attempt failed, try with 'number' parameter as fallback
+    if not new_api_success:
+        logger.info("Trying Paanel API with 'number' parameter as fallback for Aadhaar")
+        try:
+            fallback_params = {
+                "key": NEW_API_KEY,
+                "number": aadhaar_number
+            }
+            response = session.get(NEW_API_URL, params=fallback_params, timeout=30)
+            logger.info(f"Paanel API Fallback Response Status: {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                logger.info(f"Paanel API Fallback Response Data: {json.dumps(data)[:500]}")
+                
+                if data and (isinstance(data, list) or isinstance(data, dict)):
+                    records = data if isinstance(data, list) else [data] if isinstance(data, dict) else []
+                    aadhar_found = False
+                    
+                    for record in records:
+                        if isinstance(record, dict):
+                            for key, value in record.items():
+                                if value and str(aadhaar_number) in str(value):
+                                    aadhar_found = True
+                                    break
+                        if aadhar_found:
+                            break
+                    
+                    if aadhar_found:
+                        new_api_success = True
+                        new_api_response_data = data
+                        logger.info("Aadhaar found in Paanel API fallback response")
+        except Exception as e:
+            logger.error(f"Error calling Paanel API fallback: {e}")
 
     if new_api_success and new_api_response_data:
         result_text = format_paanel_data(new_api_response_data, display_query, "aadhar")
@@ -1143,8 +1118,9 @@ def main():
     print("   - Usage: /num +919873534030")
     print("   - Shows: ALL fields from ALL records")
     print("\n🪪 Aadhaar Search:")
-    print("   - API (Primary): https://api.paanel.shop/api/gateway.php?key=Seeker&number=XXXXXXXXXX")
-    print("   - API (Fallback): https://raxxosint.onrender.com/leakosint?key=LOS-419781895057E3B0&quiry=691631435425")
+    print("   - API (Primary): https://api.paanel.shop/api/gateway.php?key=Seeker&aadhar=XXXXXXXXXX")
+    print("   - API (Fallback 1): https://api.paanel.shop/api/gateway.php?key=Seeker&number=XXXXXXXXXX")
+    print("   - API (Fallback 2): https://raxxosint.onrender.com/leakosint?key=LOS-419781895057E3B0&quiry=XXXXXXXXXX")
     print("   - Usage: /aadhar 691631435425")
     print("   - Shows: ALL fields from ALL records")
     print("\n📇 PAN Search:")

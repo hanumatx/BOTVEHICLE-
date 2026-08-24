@@ -46,7 +46,7 @@ AUTHORIZED_USERS = load_auth_users()
 # API Endpoints
 VEHICLE_API = "https://chuchirandiki.vercel.app/api/vehicle"
 LEAKOSINT_API = "https://raxxosint.onrender.com/leakosint"
-LEAKOSINT_KEY = "MRX"  # Updated to MRX
+LEAKOSINT_KEY = "MRX"
 SPINNY_URL = "https://api.spinny.com/v3/api/vehicle/full-pan-details/"
 UPI_API = "https://api.truebalance.cc/v2/v2/payment/validateVPA"
 SPINNY_AUTH_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgzNDM5MDY2LCJqdGkiOiIxOTUyOTJkNDdiNjE0M2M2YjExNGUyOWQwMjc1OTA1NSIsInVzZXJfaWQiOjI3ODQxMzg3fQ.uAQg937MTs_4Dz7rgGqX28xVX7liEx6jIm0-1SL2SNc"
@@ -128,7 +128,18 @@ FIELD_EMOJIS = {
     "CreditsInappPoints": "⭐",
     "PinCode": "📮",
     "aadhar": "🪪",
-    "num": "📞"
+    "num": "📞",
+    "Gender": "⚧️",
+    "TypeOfPayment": "💳",
+    "Income": "💰",
+    "TypeOfDocument": "📄",
+    "OrderCount": "🛒",
+    "Sum": "💵",
+    "Description": "📝",
+    "Title": "📌",
+    "Source": "📡",
+    "Mobile": "📱",
+    "Address": "📍",
 }
 
 def generate_random_micr():
@@ -297,18 +308,19 @@ def format_leakosint_data(data, query, search_type="number"):
         result_text += "❌ No information found for this query."
         return result_text
     
+    record_count = 0
+    total_records = 0
+    
+    # Check if data is a dict with sources
     if isinstance(data, dict):
-        # Get all sources except metadata
-        sources = {k: v for k, v in data.items() if k not in ['developer', 'status', 'success', 'status_code', 'http_status', 'query']}
-        
-        record_count = 0
-        total_records = 0
+        # Get all sources
+        sources = {k: v for k, v in data.items() if k not in ['developer', 'status', 'success', 'status_code', 'http_status', 'query', 'title', 'description']}
         
         # Count total records first
         for source_name, source_data in sources.items():
             if isinstance(source_data, dict) and 'records' in source_data:
                 records = source_data.get('records', [])
-                if records:
+                if records and isinstance(records, list):
                     total_records += len(records)
         
         if total_records == 0:
@@ -320,13 +332,26 @@ def format_leakosint_data(data, query, search_type="number"):
             if not isinstance(source_data, dict):
                 continue
             
+            # Get source title if available
+            source_title = source_data.get('title', source_name)
+            source_description = source_data.get('description', '')
+            
+            # Add source header
+            result_text += f"📡 *SOURCE: {source_title}*\n"
+            if source_description:
+                result_text += f"📝 {source_description[:200]}...\n"
+            result_text += "─────────────────\n\n"
+            
             records = source_data.get('records', [])
-            if not records:
+            if not records or not isinstance(records, list):
                 continue
             
             for record in records:
+                if not isinstance(record, dict):
+                    continue
+                    
                 record_count += 1
-                result_text += f"📂 *RECORD #{record_count} (Source: {source_name})*\n"
+                result_text += f"📂 *RECORD #{record_count}*\n"
                 result_text += "─────────────────\n"
                 
                 # Show ALL fields from the record
@@ -334,17 +359,45 @@ def format_leakosint_data(data, query, search_type="number"):
                     if value and str(value).strip() and str(value).lower() != 'null':
                         emoji = get_field_emoji(key)
                         display_field = key.replace('_', ' ').title()
-                        result_text += f"{emoji} *{display_field}:* `{escape_markdown(str(value))}`\n"
+                        display_value = str(value)
+                        
+                        # Check if value is a string with special formatting
+                        if isinstance(value, str):
+                            # Handle comma-separated values
+                            if ',' in display_value and len(display_value) < 200:
+                                parts = [p.strip() for p in display_value.split(',') if p.strip()]
+                                if len(parts) > 1:
+                                    result_text += f"{emoji} *{display_field}:*\n"
+                                    for part in parts:
+                                        result_text += f"├ `{escape_markdown(part)}`\n"
+                                    continue
+                            
+                            # Handle pipe-separated values
+                            if '|' in display_value and len(display_value) < 200:
+                                parts = [p.strip() for p in display_value.split('|') if p.strip()]
+                                if len(parts) > 1:
+                                    result_text += f"{emoji} *{display_field}:*\n"
+                                    for part in parts:
+                                        result_text += f"├ `{escape_markdown(part)}`\n"
+                                    continue
+                        
+                        result_text += f"{emoji} *{display_field}:* `{escape_markdown(display_value)}`\n"
                 
                 result_text += "\n"
+            
+            result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         
         if record_count == 0:
-            result_text += "❌ No records found in any source."
+            result_text += "❌ No valid records found in any source."
         else:
             result_text += f"\n📊 *Total Records Found:* {record_count}"
     
+    # If data is a list (direct array of records)
     elif isinstance(data, list):
         for idx, record in enumerate(data, 1):
+            if not isinstance(record, dict):
+                continue
+                
             result_text += f"📂 *RECORD #{idx}*\n"
             result_text += "─────────────────\n"
             
@@ -352,10 +405,23 @@ def format_leakosint_data(data, query, search_type="number"):
                 if value and str(value).strip() and str(value).lower() != 'null':
                     emoji = get_field_emoji(key)
                     display_field = key.replace('_', ' ').title()
-                    result_text += f"{emoji} *{display_field}:* `{escape_markdown(str(value))}`\n"
+                    display_value = str(value)
+                    
+                    if isinstance(value, str) and ',' in display_value and len(display_value) < 200:
+                        parts = [p.strip() for p in display_value.split(',') if p.strip()]
+                        if len(parts) > 1:
+                            result_text += f"{emoji} *{display_field}:*\n"
+                            for part in parts:
+                                result_text += f"├ `{escape_markdown(part)}`\n"
+                            continue
+                    
+                    result_text += f"{emoji} *{display_field}:* `{escape_markdown(display_value)}`\n"
             result_text += "\n"
         
-        result_text += f"\n📊 *Total Records Found:* {len(data)}"
+        if len(data) == 0:
+            result_text += "❌ No records found."
+        else:
+            result_text += f"\n📊 *Total Records Found:* {len(data)}"
     
     else:
         result_text += "❌ Unexpected response format from API."
@@ -507,8 +573,12 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Use Leakosint API with MRX key
     try:
-        # Format the query properly with +91 prefix
-        full_query = f"+91{number}"
+        # Format the query - don't add +91 if already present
+        if query.startswith('+'):
+            full_query = query
+        else:
+            full_query = f"+91{number}"
+            
         params = {
             "key": LEAKOSINT_KEY,
             "quiry": full_query
@@ -519,9 +589,10 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if response.status_code == 200:
             data = response.json()
-            logger.info(f"Leakosint API Response Data: {json.dumps(data)[:500]}")
+            logger.info(f"Leakosint API Response Keys: {data.keys() if isinstance(data, dict) else 'Not a dict'}")
             
-            if data.get('success') and data.get('data'):
+            # Check if we have data
+            if data.get('status') and data.get('data'):
                 result_text = format_leakosint_data(data.get('data'), display_query, "number")
             else:
                 result_text = f"🔥 *Number Info Result*\n"
@@ -588,9 +659,10 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if response.status_code == 200:
             data = response.json()
-            logger.info(f"Leakosint API Response Data: {json.dumps(data)[:500]}")
+            logger.info(f"Leakosint API Response Keys: {data.keys() if isinstance(data, dict) else 'Not a dict'}")
             
-            if data.get('success') and data.get('data'):
+            # Check if we have data
+            if data.get('status') and data.get('data'):
                 result_text = format_leakosint_data(data.get('data'), display_query, "aadhar")
             else:
                 result_text = f"🔥 *Aadhaar Info Result*\n"

@@ -45,8 +45,8 @@ AUTHORIZED_USERS = load_auth_users()
 
 # API Endpoints
 VEHICLE_API = "https://chuchirandiki.vercel.app/api/vehicle"
-LEAKOSINT_API = "https://raxxosint.onrender.com/leakosint"
-LEAKOSINT_KEY = "MRX"
+NEW_API = "https://api.paanel.shop/api/gateway.php"
+API_KEY = "Seeker"
 SPINNY_URL = "https://api.spinny.com/v3/api/vehicle/full-pan-details/"
 UPI_API = "https://api.truebalance.cc/v2/v2/payment/validateVPA"
 SPINNY_AUTH_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgzNDM5MDY2LCJqdGkiOiIxOTUyOTJkNDdiNjE0M2M2YjExNGUyOWQwMjc1OTA1NSIsInVzZXJfaWQiOjI3ODQxMzg3fQ.uAQg937MTs_4Dz7rgGqX28xVX7liEx6jIm0-1SL2SNc"
@@ -213,14 +213,11 @@ def escape_markdown(text):
     return text
 
 def sanitize_error_message(error_msg):
-    if LEAKOSINT_KEY in error_msg:
-        error_msg = error_msg.replace(LEAKOSINT_KEY, "[HIDDEN]")
-    
     api_patterns = [
         r'https://chuchirandiki\.vercel\.app[^\s]*',
         r'https://api\.spinny\.com[^\s]*',
         r'https://api\.truebalance\.cc[^\s]*',
-        r'https://raxxosint\.onrender\.com[^\s]*',
+        r'https://api\.paanel\.shop[^\s]*',
     ]
     for pattern in api_patterns:
         error_msg = re.sub(pattern, '[API_ENDPOINT]', error_msg)
@@ -293,13 +290,13 @@ def format_vehicle_data(data, registration_number):
 
     return result_text
 
-def format_leakosint_data(data, query, search_type="number"):
-    """Format data from Leakosint API - Shows ALL fields from ALL sources"""
+def format_new_api_data(data, query, search_type="number"):
+    """Format data from the new Paanel API"""
     if search_type == "number":
-        result_text = f"🔥 *NUMBER INFO (RAXXOSINT)*\n"
+        result_text = f"🔥 *NUMBER INFO (PAANEL API)*\n"
         result_text += f"📱 Number: `{query}`\n"
     else:
-        result_text = f"🔥 *AADHAAR INFO (RAXXOSINT)*\n"
+        result_text = f"🔥 *AADHAAR INFO (PAANEL API)*\n"
         result_text += f"🪪 Aadhaar: `{query}`\n"
     
     result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -308,63 +305,39 @@ def format_leakosint_data(data, query, search_type="number"):
         result_text += "❌ No information found for this query."
         return result_text
     
-    record_count = 0
-    total_records = 0
-    
-    # Check if data is a dict with sources
+    # Check if data is a dict
     if isinstance(data, dict):
-        # Get all sources
-        sources = {k: v for k, v in data.items() if k not in ['developer', 'status', 'success', 'status_code', 'http_status', 'query', 'title', 'description']}
-        
-        # Count total records first
-        for source_name, source_data in sources.items():
-            if isinstance(source_data, dict) and 'records' in source_data:
-                records = source_data.get('records', [])
-                if records and isinstance(records, list):
-                    total_records += len(records)
-        
-        if total_records == 0:
-            result_text += "❌ No records found in any source."
+        # Check if there's a status or error
+        if data.get('status') == 'error' or data.get('error'):
+            error_msg = data.get('message', data.get('error', 'Unknown error'))
+            result_text += f"❌ API Error: {error_msg}"
             return result_text
         
-        # Display all records from all sources
-        for source_name, source_data in sources.items():
-            if not isinstance(source_data, dict):
-                continue
-            
-            # Get source title if available
-            source_title = source_data.get('title', source_name)
-            source_description = source_data.get('description', '')
-            
-            # Add source header
-            result_text += f"📡 *SOURCE: {source_title}*\n"
-            if source_description:
-                result_text += f"📝 {source_description[:200]}...\n"
-            result_text += "─────────────────\n\n"
-            
-            records = source_data.get('records', [])
-            if not records or not isinstance(records, list):
-                continue
-            
-            for record in records:
-                if not isinstance(record, dict):
-                    continue
-                    
-                record_count += 1
-                result_text += f"📂 *RECORD #{record_count}*\n"
-                result_text += "─────────────────\n"
+        # Check if data contains records
+        if 'data' in data and data['data']:
+            records = data['data']
+            if isinstance(records, list):
+                if len(records) == 0:
+                    result_text += "❌ No records found."
+                    return result_text
                 
-                # Show ALL fields from the record
-                for key, value in record.items():
-                    if value and str(value).strip() and str(value).lower() != 'null':
-                        emoji = get_field_emoji(key)
-                        display_field = key.replace('_', ' ').title()
-                        display_value = str(value)
-                        
-                        # Check if value is a string with special formatting
-                        if isinstance(value, str):
+                record_count = 0
+                for record in records:
+                    if not isinstance(record, dict):
+                        continue
+                    record_count += 1
+                    result_text += f"📂 *RECORD #{record_count}*\n"
+                    result_text += "─────────────────\n"
+                    
+                    # Display all fields from the record
+                    for key, value in record.items():
+                        if value and str(value).strip() and str(value).lower() != 'null':
+                            emoji = get_field_emoji(key)
+                            display_field = key.replace('_', ' ').title()
+                            display_value = str(value)
+                            
                             # Handle comma-separated values
-                            if ',' in display_value and len(display_value) < 200:
+                            if isinstance(value, str) and ',' in display_value and len(display_value) < 200:
                                 parts = [p.strip() for p in display_value.split(',') if p.strip()]
                                 if len(parts) > 1:
                                     result_text += f"{emoji} *{display_field}:*\n"
@@ -373,27 +346,48 @@ def format_leakosint_data(data, query, search_type="number"):
                                     continue
                             
                             # Handle pipe-separated values
-                            if '|' in display_value and len(display_value) < 200:
+                            if isinstance(value, str) and '|' in display_value and len(display_value) < 200:
                                 parts = [p.strip() for p in display_value.split('|') if p.strip()]
                                 if len(parts) > 1:
                                     result_text += f"{emoji} *{display_field}:*\n"
                                     for part in parts:
                                         result_text += f"├ `{escape_markdown(part)}`\n"
                                     continue
-                        
-                        result_text += f"{emoji} *{display_field}:* `{escape_markdown(display_value)}`\n"
+                            
+                            result_text += f"{emoji} *{display_field}:* `{escape_markdown(display_value)}`\n"
+                    result_text += "\n"
                 
-                result_text += "\n"
-            
-            result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        
-        if record_count == 0:
-            result_text += "❌ No valid records found in any source."
+                if record_count == 0:
+                    result_text += "❌ No valid records found."
+                else:
+                    result_text += f"\n📊 *Total Records Found:* {record_count}"
+            else:
+                # Single record (dict)
+                result_text += "📂 *RECORD DETAILS*\n"
+                result_text += "─────────────────\n"
+                for key, value in data['data'].items():
+                    if value and str(value).strip() and str(value).lower() != 'null':
+                        emoji = get_field_emoji(key)
+                        display_field = key.replace('_', ' ').title()
+                        display_value = str(value)
+                        result_text += f"{emoji} *{display_field}:* `{escape_markdown(display_value)}`\n"
         else:
-            result_text += f"\n📊 *Total Records Found:* {record_count}"
+            # No 'data' key, show all fields directly
+            result_text += "📂 *DETAILS*\n"
+            result_text += "─────────────────\n"
+            for key, value in data.items():
+                if key.lower() not in ['status', 'success', 'message'] and value and str(value).strip() and str(value).lower() != 'null':
+                    emoji = get_field_emoji(key)
+                    display_field = key.replace('_', ' ').title()
+                    display_value = str(value)
+                    result_text += f"{emoji} *{display_field}:* `{escape_markdown(display_value)}`\n"
     
-    # If data is a list (direct array of records)
+    # If data is a list
     elif isinstance(data, list):
+        if len(data) == 0:
+            result_text += "❌ No records found."
+            return result_text
+        
         for idx, record in enumerate(data, 1):
             if not isinstance(record, dict):
                 continue
@@ -418,11 +412,7 @@ def format_leakosint_data(data, query, search_type="number"):
                     result_text += f"{emoji} *{display_field}:* `{escape_markdown(display_value)}`\n"
             result_text += "\n"
         
-        if len(data) == 0:
-            result_text += "❌ No records found."
-        else:
-            result_text += f"\n📊 *Total Records Found:* {len(data)}"
-    
+        result_text += f"\n📊 *Total Records Found:* {len(data)}"
     else:
         result_text += "❌ Unexpected response format from API."
     
@@ -545,8 +535,8 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "❌ Please provide a mobile number!\n\n"
             "*Examples:*\n"
-            "`/num 8810590661`\n"
-            "`/num +918810590661`\n\n"
+            "`/num 9979512484`\n"
+            "`/num +919979512484`\n\n"
             "*Note:* Always use +91 prefix for best results.",
             parse_mode='Markdown'
         )
@@ -571,34 +561,35 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
     
-    # Use Leakosint API with MRX key
+    # Use new Paanel API
     try:
-        # Format the query - don't add +91 if already present
+        # Format the query - remove +91 if present
         if query.startswith('+'):
-            full_query = query
+            number = query[3:] if query.startswith('+91') else query[1:]
         else:
-            full_query = f"+91{number}"
-            
+            number = digits[-10:]
+        
         params = {
-            "key": LEAKOSINT_KEY,
-            "quiry": full_query
+            "key": API_KEY,
+            "number": number
         }
-        logger.info(f"Calling Leakosint API for number: {full_query}")
-        response = session.get(LEAKOSINT_API, params=params, timeout=90)
-        logger.info(f"Leakosint API Response Status: {response.status_code}")
+        logger.info(f"Calling Paanel API for number: {number}")
+        response = session.get(NEW_API, params=params, timeout=60)
+        logger.info(f"Paanel API Response Status: {response.status_code}")
         
         if response.status_code == 200:
             data = response.json()
-            logger.info(f"Leakosint API Response Keys: {data.keys() if isinstance(data, dict) else 'Not a dict'}")
+            logger.info(f"Paanel API Response Keys: {data.keys() if isinstance(data, dict) else 'Not a dict'}")
             
             # Check if we have data
-            if data.get('status') and data.get('data'):
-                result_text = format_leakosint_data(data.get('data'), display_query, "number")
+            if data and data.get('status') != 'error':
+                result_text = format_new_api_data(data, display_query, "number")
             else:
                 result_text = f"🔥 *Number Info Result*\n"
                 result_text += f"📱 Number: `{display_query}`\n"
                 result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                result_text += "❌ No information found for this number."
+                error_msg = data.get('message', 'No information found for this number.')
+                result_text += f"❌ {error_msg}"
             
             if len(result_text) > 4000:
                 result_text = result_text[:4000] + "\n... (response truncated)"
@@ -622,7 +613,7 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "❌ Please provide an Aadhaar number!\n\n"
             "*Examples:*\n"
-            "`/aadhar 691631435425`\n\n"
+            "`/aadhar 630971591338`\n\n"
             "*Note:* Aadhaar must be exactly 12 digits.",
             parse_mode='Markdown'
         )
@@ -647,28 +638,29 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
     
-    # Use Leakosint API with MRX key
+    # Use new Paanel API
     try:
         params = {
-            "key": LEAKOSINT_KEY,
-            "quiry": aadhaar_number
+            "key": API_KEY,
+            "aadhar": aadhaar_number
         }
-        logger.info(f"Calling Leakosint API for Aadhaar: {aadhaar_number}")
-        response = session.get(LEAKOSINT_API, params=params, timeout=90)
-        logger.info(f"Leakosint API Response Status: {response.status_code}")
+        logger.info(f"Calling Paanel API for Aadhaar: {aadhaar_number}")
+        response = session.get(NEW_API, params=params, timeout=60)
+        logger.info(f"Paanel API Response Status: {response.status_code}")
         
         if response.status_code == 200:
             data = response.json()
-            logger.info(f"Leakosint API Response Keys: {data.keys() if isinstance(data, dict) else 'Not a dict'}")
+            logger.info(f"Paanel API Response Keys: {data.keys() if isinstance(data, dict) else 'Not a dict'}")
             
             # Check if we have data
-            if data.get('status') and data.get('data'):
-                result_text = format_leakosint_data(data.get('data'), display_query, "aadhar")
+            if data and data.get('status') != 'error':
+                result_text = format_new_api_data(data, display_query, "aadhar")
             else:
                 result_text = f"🔥 *Aadhaar Info Result*\n"
                 result_text += f"🪪 Aadhaar: `{display_query}`\n"
                 result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                result_text += "❌ No information found for this Aadhaar number."
+                error_msg = data.get('message', 'No information found for this Aadhaar number.')
+                result_text += f"❌ {error_msg}"
             
             if len(result_text) > 4000:
                 result_text = result_text[:4000] + "\n... (response truncated)"
@@ -807,8 +799,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *Select an option below:*
 
 🚗 *Vehicle Search* - Comprehensive vehicle info
-📱 *Mobile Search* - Mobile number details (via Raxxosint API)
-🪪 *Aadhaar Search* - Aadhaar number details (via Raxxosint API)
+📱 *Mobile Search* - Mobile number details (via Paanel API)
+🪪 *Aadhaar Search* - Aadhaar number details (via Paanel API)
 📇 *PAN Card* - PAN card details
 💳 *UPI Validation* - Validate UPI/VPA ID
 
@@ -816,8 +808,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 💡 *Commands:*
 `/vehicle MH47BG7036`
-`/num +919873534030` - Mobile details
-`/aadhar 691631435425` - Aadhaar details
+`/num 9979512484` - Mobile details
+`/aadhar 630971591338` - Aadhaar details
 `/pan ACCPA2495F`
 `/upi vipansharma1931141@okhdfcbank`
     """
@@ -862,9 +854,9 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "📱 *MOBILE SEARCH*\n\n"
             "Search details for any mobile number.\n\n"
             "*Usage:*\n"
-            "`/num +919873534030`\n"
-            "`/num 9873534030`\n\n"
-            "*Returns comprehensive data from Raxxosint API:*\n"
+            "`/num 9979512484`\n"
+            "`/num +919979512484`\n\n"
+            "*Returns comprehensive data from Paanel API:*\n"
             "• Full Name & Father's Name\n"
             "• Phone numbers (up to 8)\n"
             "• Addresses & Email\n"
@@ -880,9 +872,9 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🪪 *AADHAAR SEARCH*\n\n"
             "Search details by Aadhaar number.\n\n"
             "*Usage:*\n"
-            "`/aadhar 691631435425`\n\n"
+            "`/aadhar 630971591338`\n\n"
             "*Note:* Aadhaar must be exactly 12 digits.\n\n"
-            "*Returns comprehensive data from Raxxosint API:*\n"
+            "*Returns comprehensive data from Paanel API:*\n"
             "• Full Name & Father's Name\n"
             "• Phone numbers (up to 8)\n"
             "• Addresses & Email\n"
@@ -912,8 +904,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *Available Commands:*
 
 🚗 `/vehicle` - Full vehicle search
-📱 `/num` - Mobile number details (Raxxosint API)
-🪪 `/aadhar` - Aadhaar number details (Raxxosint API)
+📱 `/num` - Mobile number details (Paanel API)
+🪪 `/aadhar` - Aadhaar number details (Paanel API)
 📇 `/pan` - PAN card details
 💳 `/upi` - Validate UPI ID
 
@@ -921,16 +913,16 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 *Examples:*
 `/vehicle MH47BG7036`
-`/num +919873534030` - Mobile details
-`/aadhar 691631435425` - Aadhaar details
+`/num 9979512484` - Mobile details
+`/aadhar 630971591338` - Aadhaar details
 `/pan ACCPA2495F`
 `/upi vipansharma1931141@okhdfcbank`
 
 ━━━━━━━━━━━━━━━━━━━━━━━
 
 *About Mobile & Aadhaar Search:*
-• API: Raxxosint (https://raxxosint.onrender.com)
-• Key: MRX
+• API: https://api.paanel.shop/api/gateway.php
+• Key: Seeker
 • Shows ALL fields from ALL records
 • Returns comprehensive data including:
   • Full Name & Father's Name
@@ -991,12 +983,12 @@ def main():
     print("   - API: https://chuchirandiki.vercel.app/api/vehicle?reg_no=XXXXXXXXXX")
     print("   - Usage: /vehicle MH47BG7036")
     print("\n📱 Mobile Search:")
-    print("   - API: https://raxxosint.onrender.com/leakosint?key=MRX&quiry=+919873534030")
-    print("   - Usage: /num +919873534030")
+    print("   - API: https://api.paanel.shop/api/gateway.php?key=Seeker&number=XXXXXXXXXX")
+    print("   - Usage: /num 9979512484")
     print("   - Shows: ALL fields from ALL records")
     print("\n🪪 Aadhaar Search:")
-    print("   - API: https://raxxosint.onrender.com/leakosint?key=MRX&quiry=XXXXXXXXXX")
-    print("   - Usage: /aadhar 691631435425")
+    print("   - API: https://api.paanel.shop/api/gateway.php?key=Seeker&aadhar=XXXXXXXXXX")
+    print("   - Usage: /aadhar 630971591338")
     print("   - Shows: ALL fields from ALL records")
     print("\n📇 PAN Search:")
     print("   - Usage: /pan ACCPA2495F")

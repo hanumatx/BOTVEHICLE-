@@ -354,7 +354,6 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
     
-    # Use new Paanel API
     try:
         # Format the query - remove +91 if present
         if query.startswith('+'):
@@ -367,15 +366,18 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "number": number
         }
         logger.info(f"Calling Paanel API for number: {number}")
+        logger.info(f"URL: {NEW_API}?key={API_KEY}&number={number}")
+        
         response = session.get(NEW_API, params=params, timeout=60)
         logger.info(f"Paanel API Response Status: {response.status_code}")
+        logger.info(f"Response Headers: {dict(response.headers)}")
         
         if response.status_code == 200:
-            data = response.json()
-            logger.info(f"Paanel API Response Keys: {data.keys() if isinstance(data, dict) else 'Not a dict'}")
-            
-            # Check if we have data
-            if data and data.get('status') != 'error':
+            try:
+                data = response.json()
+                logger.info(f"Response data type: {type(data)}")
+                logger.info(f"Response data: {json.dumps(data, indent=2)[:500]}")
+                
                 # Format as raw JSON
                 result_text = f"🔥 *NUMBER INFO (PAANEL API)*\n"
                 result_text += f"📱 Number: `{display_query}`\n"
@@ -383,35 +385,48 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 result_text += "```json\n"
                 result_text += json.dumps(data, indent=2, ensure_ascii=False)
                 result_text += "\n```"
-            else:
-                result_text = f"🔥 *Number Info Result*\n"
-                result_text += f"📱 Number: `{display_query}`\n"
-                result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                error_msg = data.get('message', 'No information found for this number.')
-                result_text += f"❌ {error_msg}"
-            
-            if len(result_text) > 4000:
-                # Truncate JSON if too long
-                json_str = json.dumps(data, indent=2, ensure_ascii=False)
-                if len(json_str) > 3500:
-                    json_str = json_str[:3500] + "\n... (truncated)"
-                result_text = f"🔥 *NUMBER INFO (PAANEL API)*\n"
-                result_text += f"📱 Number: `{display_query}`\n"
-                result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                result_text += "```json\n"
-                result_text += json_str
-                result_text += "\n```"
-            
-            keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
+                
+                if len(result_text) > 4000:
+                    json_str = json.dumps(data, indent=2, ensure_ascii=False)
+                    if len(json_str) > 3500:
+                        json_str = json_str[:3500] + "\n... (truncated)"
+                    result_text = f"🔥 *NUMBER INFO (PAANEL API)*\n"
+                    result_text += f"📱 Number: `{display_query}`\n"
+                    result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                    result_text += "```json\n"
+                    result_text += json_str
+                    result_text += "\n```"
+                
+                keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
+                
+            except json.JSONDecodeError as je:
+                logger.error(f"JSON Decode Error: {je}")
+                logger.error(f"Raw response: {response.text[:500]}")
+                await msg.edit_text(
+                    f"❌ Failed to parse API response.\n\n"
+                    f"Raw response (first 500 chars):\n```\n{response.text[:500]}\n```"
+                )
         else:
-            await msg.edit_text(f"❌ Failed to fetch number details. Status: {response.status_code}")
+            await msg.edit_text(
+                f"❌ Failed to fetch number details.\n"
+                f"Status Code: {response.status_code}\n"
+                f"Response: {response.text[:200]}"
+            )
         
+    except requests.exceptions.Timeout:
+        await msg.edit_text("❌ Request timed out. The API server might be slow or down.")
+    except requests.exceptions.ConnectionError:
+        await msg.edit_text("❌ Connection error. Please check your internet connection.")
     except Exception as e:
         error_msg = sanitize_error_message(str(e))
         logger.error(f"Error in num_command: {error_msg}")
-        await msg.edit_text(f"❌ An error occurred while fetching data. Please try again later.")
+        logger.exception(e)
+        await msg.edit_text(
+            f"❌ An error occurred while fetching data.\n\n"
+            f"Error: {error_msg[:200]}"
+        )
 
 async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_subscribed(update, context):
@@ -446,22 +461,22 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
     
-    # Use new Paanel API
     try:
         params = {
             "key": API_KEY,
             "aadhar": aadhaar_number
         }
         logger.info(f"Calling Paanel API for Aadhaar: {aadhaar_number}")
+        logger.info(f"URL: {NEW_API}?key={API_KEY}&aadhar={aadhaar_number}")
+        
         response = session.get(NEW_API, params=params, timeout=60)
         logger.info(f"Paanel API Response Status: {response.status_code}")
         
         if response.status_code == 200:
-            data = response.json()
-            logger.info(f"Paanel API Response Keys: {data.keys() if isinstance(data, dict) else 'Not a dict'}")
-            
-            # Check if we have data
-            if data and data.get('status') != 'error':
+            try:
+                data = response.json()
+                logger.info(f"Response data type: {type(data)}")
+                
                 # Format as raw JSON
                 result_text = f"🔥 *AADHAAR INFO (PAANEL API)*\n"
                 result_text += f"🪪 Aadhaar: `{display_query}`\n"
@@ -469,35 +484,48 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 result_text += "```json\n"
                 result_text += json.dumps(data, indent=2, ensure_ascii=False)
                 result_text += "\n```"
-            else:
-                result_text = f"🔥 *Aadhaar Info Result*\n"
-                result_text += f"🪪 Aadhaar: `{display_query}`\n"
-                result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                error_msg = data.get('message', 'No information found for this Aadhaar number.')
-                result_text += f"❌ {error_msg}"
-            
-            if len(result_text) > 4000:
-                # Truncate JSON if too long
-                json_str = json.dumps(data, indent=2, ensure_ascii=False)
-                if len(json_str) > 3500:
-                    json_str = json_str[:3500] + "\n... (truncated)"
-                result_text = f"🔥 *AADHAAR INFO (PAANEL API)*\n"
-                result_text += f"🪪 Aadhaar: `{display_query}`\n"
-                result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                result_text += "```json\n"
-                result_text += json_str
-                result_text += "\n```"
-            
-            keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
+                
+                if len(result_text) > 4000:
+                    json_str = json.dumps(data, indent=2, ensure_ascii=False)
+                    if len(json_str) > 3500:
+                        json_str = json_str[:3500] + "\n... (truncated)"
+                    result_text = f"🔥 *AADHAAR INFO (PAANEL API)*\n"
+                    result_text += f"🪪 Aadhaar: `{display_query}`\n"
+                    result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                    result_text += "```json\n"
+                    result_text += json_str
+                    result_text += "\n```"
+                
+                keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
+                
+            except json.JSONDecodeError as je:
+                logger.error(f"JSON Decode Error: {je}")
+                logger.error(f"Raw response: {response.text[:500]}")
+                await msg.edit_text(
+                    f"❌ Failed to parse API response.\n\n"
+                    f"Raw response (first 500 chars):\n```\n{response.text[:500]}\n```"
+                )
         else:
-            await msg.edit_text(f"❌ Failed to fetch Aadhaar details. Status: {response.status_code}")
+            await msg.edit_text(
+                f"❌ Failed to fetch Aadhaar details.\n"
+                f"Status Code: {response.status_code}\n"
+                f"Response: {response.text[:200]}"
+            )
         
+    except requests.exceptions.Timeout:
+        await msg.edit_text("❌ Request timed out. The API server might be slow or down.")
+    except requests.exceptions.ConnectionError:
+        await msg.edit_text("❌ Connection error. Please check your internet connection.")
     except Exception as e:
         error_msg = sanitize_error_message(str(e))
         logger.error(f"Error in aadhar_command: {error_msg}")
-        await msg.edit_text(f"❌ An error occurred while fetching data. Please try again later.")
+        logger.exception(e)
+        await msg.edit_text(
+            f"❌ An error occurred while fetching data.\n\n"
+            f"Error: {error_msg[:200]}"
+        )
 
 async def pan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_subscribed(update, context):

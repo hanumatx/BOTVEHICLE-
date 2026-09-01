@@ -74,74 +74,6 @@ CITIES = [
     "Patna", "Ludhiana", "Agra", "Nashik", "Ranchi"
 ]
 
-# Field name mappings for API response
-FIELD_EMOJIS = {
-    "NAME": "👤",
-    "fname": "👨‍👦",
-    "ADDRESS": "📍",
-    "MOBILE": "📞",
-    "alt": "📱",
-    "circle": "📡",
-    "id": "🪪",
-    "email": "📧",
-    "icic": "🏦",
-    "msid": "📱",
-    "Phone": "📞",
-    "Phone2": "📱",
-    "Phone3": "📱",
-    "Phone4": "📱",
-    "Phone5": "📱",
-    "Phone6": "📱",
-    "Phone7": "📱",
-    "Phone8": "📱",
-    "FullName": "👤",
-    "FatherName": "👨‍👦",
-    "Adres": "📍",
-    "Adres2": "📍",
-    "Adres3": "📍",
-    "DocumentNumber": "🪪",
-    "Email": "📧",
-    "Email2": "📧",
-    "Region": "📡",
-    "City": "🏙️",
-    "Stat": "🗺️",
-    "State": "🗺️",
-    "IndianState": "🗺️",
-    "PostalCode": "📮",
-    "Provider": "📡",
-    "MobileOperator": "📡",
-    "MobilePhone": "📞",
-    "DateOfBirth": "🎂",
-    "Company": "🏢",
-    "Category": "📋",
-    "Type": "📋",
-    "Country": "🌍",
-    "IP": "🌐",
-    "RegistrationDate": "📅",
-    "TheDateOfTheEntrance": "📅",
-    "Name": "👤",
-    "Surname": "👤",
-    "Nick": "👤",
-    "Login": "🔑",
-    "Titul": "👤",
-    "EncryptedPassword": "🔒",
-    "CreditsInappPoints": "⭐",
-    "PinCode": "📮",
-    "aadhar": "🪪",
-    "num": "📞",
-    "Gender": "⚧️",
-    "TypeOfPayment": "💳",
-    "Income": "💰",
-    "TypeOfDocument": "📄",
-    "OrderCount": "🛒",
-    "Sum": "💵",
-    "Description": "📝",
-    "Title": "📌",
-    "Source": "📡",
-    "Mobile": "📱",
-    "Address": "📍",
-}
-
 def generate_random_micr():
     return ''.join(str(random.randint(0, 9)) for _ in range(9))
 
@@ -166,12 +98,6 @@ def generate_random_email(name=""):
         name = name.lower().replace(" ", "")
         return f"{name}{random.randint(1, 999)}@{random.choice(domains)}"
     return f"user{random.randint(1000, 9999)}@{random.choice(domains)}"
-
-def generate_random_icic():
-    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=11))
-
-def generate_random_msid():
-    return ''.join(str(random.randint(0, 9)) for _ in range(15))
 
 UPI_HEADERS = {
     "Host": "api.truebalance.cc",
@@ -227,11 +153,6 @@ def sanitize_error_message(error_msg):
     error_msg = re.sub(r'Authorization: Bearer [^\s]+', 'Authorization: Bearer [HIDDEN]', error_msg)
     
     return error_msg
-
-def get_field_emoji(field_name):
-    if field_name in FIELD_EMOJIS:
-        return FIELD_EMOJIS[field_name]
-    return "📌"
 
 def format_vehicle_data(data, registration_number):
     result_text = f"🚗 *VEHICLE DETAILS*\n"
@@ -289,134 +210,6 @@ def format_vehicle_data(data, registration_number):
         result_text += f"└ Variant IDs: `{escape_markdown(variant_ids)}`\n"
 
     return result_text
-
-def format_new_api_data(data, query, search_type="number"):
-    """Format data from the new Paanel API"""
-    if search_type == "number":
-        result_text = f"🔥 *NUMBER INFO (PAANEL API)*\n"
-        result_text += f"📱 Number: `{query}`\n"
-    else:
-        result_text = f"🔥 *AADHAAR INFO (PAANEL API)*\n"
-        result_text += f"🪪 Aadhaar: `{query}`\n"
-    
-    result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-    
-    if not data:
-        result_text += "❌ No information found for this query."
-        return result_text
-    
-    # Check if data is a dict
-    if isinstance(data, dict):
-        # Check if there's a status or error
-        if data.get('status') == 'error' or data.get('error'):
-            error_msg = data.get('message', data.get('error', 'Unknown error'))
-            result_text += f"❌ API Error: {error_msg}"
-            return result_text
-        
-        # Check if data contains records
-        if 'data' in data and data['data']:
-            records = data['data']
-            if isinstance(records, list):
-                if len(records) == 0:
-                    result_text += "❌ No records found."
-                    return result_text
-                
-                record_count = 0
-                for record in records:
-                    if not isinstance(record, dict):
-                        continue
-                    record_count += 1
-                    result_text += f"📂 *RECORD #{record_count}*\n"
-                    result_text += "─────────────────\n"
-                    
-                    # Display all fields from the record
-                    for key, value in record.items():
-                        if value and str(value).strip() and str(value).lower() != 'null':
-                            emoji = get_field_emoji(key)
-                            display_field = key.replace('_', ' ').title()
-                            display_value = str(value)
-                            
-                            # Handle comma-separated values
-                            if isinstance(value, str) and ',' in display_value and len(display_value) < 200:
-                                parts = [p.strip() for p in display_value.split(',') if p.strip()]
-                                if len(parts) > 1:
-                                    result_text += f"{emoji} *{display_field}:*\n"
-                                    for part in parts:
-                                        result_text += f"├ `{escape_markdown(part)}`\n"
-                                    continue
-                            
-                            # Handle pipe-separated values
-                            if isinstance(value, str) and '|' in display_value and len(display_value) < 200:
-                                parts = [p.strip() for p in display_value.split('|') if p.strip()]
-                                if len(parts) > 1:
-                                    result_text += f"{emoji} *{display_field}:*\n"
-                                    for part in parts:
-                                        result_text += f"├ `{escape_markdown(part)}`\n"
-                                    continue
-                            
-                            result_text += f"{emoji} *{display_field}:* `{escape_markdown(display_value)}`\n"
-                    result_text += "\n"
-                
-                if record_count == 0:
-                    result_text += "❌ No valid records found."
-                else:
-                    result_text += f"\n📊 *Total Records Found:* {record_count}"
-            else:
-                # Single record (dict)
-                result_text += "📂 *RECORD DETAILS*\n"
-                result_text += "─────────────────\n"
-                for key, value in data['data'].items():
-                    if value and str(value).strip() and str(value).lower() != 'null':
-                        emoji = get_field_emoji(key)
-                        display_field = key.replace('_', ' ').title()
-                        display_value = str(value)
-                        result_text += f"{emoji} *{display_field}:* `{escape_markdown(display_value)}`\n"
-        else:
-            # No 'data' key, show all fields directly
-            result_text += "📂 *DETAILS*\n"
-            result_text += "─────────────────\n"
-            for key, value in data.items():
-                if key.lower() not in ['status', 'success', 'message'] and value and str(value).strip() and str(value).lower() != 'null':
-                    emoji = get_field_emoji(key)
-                    display_field = key.replace('_', ' ').title()
-                    display_value = str(value)
-                    result_text += f"{emoji} *{display_field}:* `{escape_markdown(display_value)}`\n"
-    
-    # If data is a list
-    elif isinstance(data, list):
-        if len(data) == 0:
-            result_text += "❌ No records found."
-            return result_text
-        
-        for idx, record in enumerate(data, 1):
-            if not isinstance(record, dict):
-                continue
-                
-            result_text += f"📂 *RECORD #{idx}*\n"
-            result_text += "─────────────────\n"
-            
-            for key, value in record.items():
-                if value and str(value).strip() and str(value).lower() != 'null':
-                    emoji = get_field_emoji(key)
-                    display_field = key.replace('_', ' ').title()
-                    display_value = str(value)
-                    
-                    if isinstance(value, str) and ',' in display_value and len(display_value) < 200:
-                        parts = [p.strip() for p in display_value.split(',') if p.strip()]
-                        if len(parts) > 1:
-                            result_text += f"{emoji} *{display_field}:*\n"
-                            for part in parts:
-                                result_text += f"├ `{escape_markdown(part)}`\n"
-                            continue
-                    
-                    result_text += f"{emoji} *{display_field}:* `{escape_markdown(display_value)}`\n"
-            result_text += "\n"
-        
-        result_text += f"\n📊 *Total Records Found:* {len(data)}"
-    else:
-        result_text += "❌ Unexpected response format from API."
-    
-    return result_text.rstrip()
 
 async def is_subscribed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     user_id = update.effective_user.id
@@ -583,7 +376,13 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # Check if we have data
             if data and data.get('status') != 'error':
-                result_text = format_new_api_data(data, display_query, "number")
+                # Format as raw JSON
+                result_text = f"🔥 *NUMBER INFO (PAANEL API)*\n"
+                result_text += f"📱 Number: `{display_query}`\n"
+                result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                result_text += "```json\n"
+                result_text += json.dumps(data, indent=2, ensure_ascii=False)
+                result_text += "\n```"
             else:
                 result_text = f"🔥 *Number Info Result*\n"
                 result_text += f"📱 Number: `{display_query}`\n"
@@ -592,7 +391,16 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 result_text += f"❌ {error_msg}"
             
             if len(result_text) > 4000:
-                result_text = result_text[:4000] + "\n... (response truncated)"
+                # Truncate JSON if too long
+                json_str = json.dumps(data, indent=2, ensure_ascii=False)
+                if len(json_str) > 3500:
+                    json_str = json_str[:3500] + "\n... (truncated)"
+                result_text = f"🔥 *NUMBER INFO (PAANEL API)*\n"
+                result_text += f"📱 Number: `{display_query}`\n"
+                result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                result_text += "```json\n"
+                result_text += json_str
+                result_text += "\n```"
             
             keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
@@ -654,7 +462,13 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # Check if we have data
             if data and data.get('status') != 'error':
-                result_text = format_new_api_data(data, display_query, "aadhar")
+                # Format as raw JSON
+                result_text = f"🔥 *AADHAAR INFO (PAANEL API)*\n"
+                result_text += f"🪪 Aadhaar: `{display_query}`\n"
+                result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                result_text += "```json\n"
+                result_text += json.dumps(data, indent=2, ensure_ascii=False)
+                result_text += "\n```"
             else:
                 result_text = f"🔥 *Aadhaar Info Result*\n"
                 result_text += f"🪪 Aadhaar: `{display_query}`\n"
@@ -663,7 +477,16 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 result_text += f"❌ {error_msg}"
             
             if len(result_text) > 4000:
-                result_text = result_text[:4000] + "\n... (response truncated)"
+                # Truncate JSON if too long
+                json_str = json.dumps(data, indent=2, ensure_ascii=False)
+                if len(json_str) > 3500:
+                    json_str = json_str[:3500] + "\n... (truncated)"
+                result_text = f"🔥 *AADHAAR INFO (PAANEL API)*\n"
+                result_text += f"🪪 Aadhaar: `{display_query}`\n"
+                result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                result_text += "```json\n"
+                result_text += json_str
+                result_text += "\n```"
             
             keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
@@ -799,8 +622,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *Select an option below:*
 
 🚗 *Vehicle Search* - Comprehensive vehicle info
-📱 *Mobile Search* - Mobile number details (via Paanel API)
-🪪 *Aadhaar Search* - Aadhaar number details (via Paanel API)
+📱 *Mobile Search* - Mobile number details (Raw JSON)
+🪪 *Aadhaar Search* - Aadhaar number details (Raw JSON)
 📇 *PAN Card* - PAN card details
 💳 *UPI Validation* - Validate UPI/VPA ID
 
@@ -808,8 +631,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 💡 *Commands:*
 `/vehicle MH47BG7036`
-`/num 9979512484` - Mobile details
-`/aadhar 630971591338` - Aadhaar details
+`/num 9979512484` - Mobile details (Raw JSON)
+`/aadhar 630971591338` - Aadhaar details (Raw JSON)
 `/pan ACCPA2495F`
 `/upi vipansharma1931141@okhdfcbank`
     """
@@ -851,38 +674,22 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     elif data == "menu_num":
         await query.edit_message_text(
-            "📱 *MOBILE SEARCH*\n\n"
+            "📱 *MOBILE SEARCH (RAW JSON)*\n\n"
             "Search details for any mobile number.\n\n"
             "*Usage:*\n"
             "`/num 9979512484`\n"
             "`/num +919979512484`\n\n"
-            "*Returns comprehensive data from Paanel API:*\n"
-            "• Full Name & Father's Name\n"
-            "• Phone numbers (up to 8)\n"
-            "• Addresses & Email\n"
-            "• Document Numbers\n"
-            "• Region & City\n"
-            "• Provider & Operator\n"
-            "• Company & Category\n"
-            "• Date of Birth & More",
+            "*Returns raw JSON data from Paanel API*",
             parse_mode='Markdown'
         )
     elif data == "menu_aadhar":
         await query.edit_message_text(
-            "🪪 *AADHAAR SEARCH*\n\n"
+            "🪪 *AADHAAR SEARCH (RAW JSON)*\n\n"
             "Search details by Aadhaar number.\n\n"
             "*Usage:*\n"
             "`/aadhar 630971591338`\n\n"
             "*Note:* Aadhaar must be exactly 12 digits.\n\n"
-            "*Returns comprehensive data from Paanel API:*\n"
-            "• Full Name & Father's Name\n"
-            "• Phone numbers (up to 8)\n"
-            "• Addresses & Email\n"
-            "• Document Numbers\n"
-            "• Region & City\n"
-            "• Provider & Operator\n"
-            "• Company & Category\n"
-            "• Date of Birth & More",
+            "*Returns raw JSON data from Paanel API*",
             parse_mode='Markdown'
         )
     elif data == "menu_pan":
@@ -904,8 +711,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *Available Commands:*
 
 🚗 `/vehicle` - Full vehicle search
-📱 `/num` - Mobile number details (Paanel API)
-🪪 `/aadhar` - Aadhaar number details (Paanel API)
+📱 `/num` - Mobile number details (Raw JSON)
+🪪 `/aadhar` - Aadhaar number details (Raw JSON)
 📇 `/pan` - PAN card details
 💳 `/upi` - Validate UPI ID
 
@@ -913,8 +720,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 *Examples:*
 `/vehicle MH47BG7036`
-`/num 9979512484` - Mobile details
-`/aadhar 630971591338` - Aadhaar details
+`/num 9979512484` - Mobile details (Raw JSON)
+`/aadhar 630971591338` - Aadhaar details (Raw JSON)
 `/pan ACCPA2495F`
 `/upi vipansharma1931141@okhdfcbank`
 
@@ -923,15 +730,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *About Mobile & Aadhaar Search:*
 • API: https://api.paanel.shop/api/gateway.php
 • Key: Seeker
-• Shows ALL fields from ALL records
-• Returns comprehensive data including:
-  • Full Name & Father's Name
-  • Multiple Phone Numbers
-  • Complete Address with details
-  • Aadhaar Number
-  • Email Addresses
-  • Circle/Region Information
-  • And more...
+• Returns raw JSON data from the API
 
 *About Vehicle Search:*
 • `/vehicle` - Search by registration number
@@ -982,14 +781,14 @@ def main():
     print("\n🚗 Vehicle Search:")
     print("   - API: https://chuchirandiki.vercel.app/api/vehicle?reg_no=XXXXXXXXXX")
     print("   - Usage: /vehicle MH47BG7036")
-    print("\n📱 Mobile Search:")
+    print("\n📱 Mobile Search (RAW JSON):")
     print("   - API: https://api.paanel.shop/api/gateway.php?key=Seeker&number=XXXXXXXXXX")
     print("   - Usage: /num 9979512484")
-    print("   - Shows: ALL fields from ALL records")
-    print("\n🪪 Aadhaar Search:")
+    print("   - Returns: Raw JSON data")
+    print("\n🪪 Aadhaar Search (RAW JSON):")
     print("   - API: https://api.paanel.shop/api/gateway.php?key=Seeker&aadhar=XXXXXXXXXX")
     print("   - Usage: /aadhar 630971591338")
-    print("   - Shows: ALL fields from ALL records")
+    print("   - Returns: Raw JSON data")
     print("\n📇 PAN Search:")
     print("   - Usage: /pan ACCPA2495F")
     print("\n💳 UPI Validation:")

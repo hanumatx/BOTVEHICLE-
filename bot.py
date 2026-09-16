@@ -154,63 +154,6 @@ def sanitize_error_message(error_msg):
     
     return error_msg
 
-def format_vehicle_data(data, registration_number):
-    result_text = f"🚗 *VEHICLE DETAILS*\n"
-    result_text += f"🔢 *Number:* `{registration_number}`\n"
-    result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-
-    if not data or not data.get('success', False):
-        result_text += "❌ No vehicle data found or an error occurred."
-        return result_text
-
-    vehicle_info = data.get('data', {})
-    if not vehicle_info:
-        result_text += "❌ No vehicle data available in the response."
-        return result_text
-
-    result_text += f"📋 *REGISTRATION & BASIC INFO*\n"
-    result_text += f"├ Registration Date: `{escape_markdown(vehicle_info.get('registration_date', 'N/A'))}`\n"
-    result_text += f"├ Registration Year: `{escape_markdown(vehicle_info.get('registration_year', 'N/A'))}`\n"
-    result_text += f"├ Registration Month: `{escape_markdown(vehicle_info.get('registration_month', 'N/A'))}`\n"
-    result_text += f"├ Registration Address: `{escape_markdown(vehicle_info.get('registration_address', 'N/A'))}`\n"
-    result_text += f"├ Source: `{escape_markdown(vehicle_info.get('source', 'N/A'))}`\n"
-    result_text += f"└ Asset Type: `{escape_markdown(vehicle_info.get('asset_type', 'N/A'))}`\n\n"
-
-    result_text += f"⚙️ *VEHICLE SPECIFICATIONS*\n"
-    result_text += f"├ Make: `{escape_markdown(vehicle_info.get('make_name', 'N/A'))}`\n"
-    result_text += f"├ Make (Full): `{escape_markdown(vehicle_info.get('make_name2', 'N/A'))}`\n"
-    result_text += f"├ Model: `{escape_markdown(vehicle_info.get('model_name', 'N/A'))}`\n"
-    result_text += f"├ Model (Full): `{escape_markdown(vehicle_info.get('model_name2', 'N/A'))}`\n"
-    result_text += f"├ Make & Model: `{escape_markdown(vehicle_info.get('make_model', 'N/A'))}`\n"
-    result_text += f"├ Fuel Type: `{escape_markdown(vehicle_info.get('fuel_type', 'N/A'))}`\n"
-    result_text += f"├ Vehicle Color: `{escape_markdown(vehicle_info.get('vehicle_color', 'N/A'))}`\n"
-    result_text += f"├ Vehicle Type: `{escape_markdown(vehicle_info.get('vehicle_type', 'N/A'))}`\n"
-    result_text += f"├ Vehicle Type V2: `{escape_markdown(vehicle_info.get('vehicle_type_v2', 'N/A'))}`\n"
-    result_text += f"├ Chassis Number: `{escape_markdown(vehicle_info.get('chassis_number', 'N/A'))}`\n"
-    result_text += f"├ Engine Number: `{escape_markdown(vehicle_info.get('engine_number', 'N/A'))}`\n"
-    result_text += f"└ Commercial: {'✅ Yes' if vehicle_info.get('is_commercial') else '❌ No'}\n\n"
-
-    result_text += f"📍 *ADDRESS INFORMATION*\n"
-    if vehicle_info.get('permanent_address'):
-        result_text += f"├ Permanent Address: `{escape_markdown(vehicle_info.get('permanent_address'))}`\n"
-    if vehicle_info.get('present_address'):
-        result_text += f"└ Present Address: `{escape_markdown(vehicle_info.get('present_address'))}`\n"
-    result_text += "\n"
-
-    if vehicle_info.get('previous_insurer'):
-        result_text += f"🛡️ *INSURANCE INFORMATION*\n"
-        result_text += f"├ Previous Insurer: `{escape_markdown(vehicle_info.get('previous_insurer', 'N/A'))}`\n"
-        result_text += f"├ Policy Expiry Date: `{escape_markdown(vehicle_info.get('previous_policy_expiry_date', 'N/A'))}`\n"
-        result_text += f"└ Policy Expired: {'✅ Yes' if vehicle_info.get('previous_policy_expired') else '❌ No'}\n\n"
-
-    result_text += f"📌 *ADDITIONAL DETAILS*\n"
-    result_text += f"├ Asset Number: `{escape_markdown(vehicle_info.get('asset_number', 'N/A'))}`\n"
-    if vehicle_info.get('variant_id'):
-        variant_ids = ', '.join(str(v) for v in vehicle_info.get('variant_id', []))
-        result_text += f"└ Variant IDs: `{escape_markdown(variant_ids)}`\n"
-
-    return result_text
-
 async def is_subscribed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     user_id = update.effective_user.id
     chat_type = update.effective_chat.type
@@ -286,39 +229,29 @@ async def vehicle_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
         
     if not context.args:
-        await update.message.reply_text("❌ Please provide a registration number!\n\nExample: `/vehicle MH47BG7036`", parse_mode='Markdown')
+        await update.message.reply_text(
+            "❌ Please provide a registration number!\n\n"
+            "Example: `/vehicle MH47BG7036`",
+            parse_mode='Markdown'
+        )
         return
     
     registration_number = context.args[0].upper().strip()
-    msg = await update.message.reply_text(f"🔍 Fetching details for vehicle `{registration_number}`...\n⏳ Please wait...", parse_mode='Markdown')
     
-    try:
-        params = {"reg_no": registration_number}
-        response = session.get(VEHICLE_API, params=params, timeout=60)
-        
-        if response.status_code == 200:
-            data = response.json()
-            
-            if data.get('success') and data.get('data'):
-                result_text = format_vehicle_data(data, registration_number)
-            else:
-                result_text = f"🚗 *VEHICLE DETAILS*\n"
-                result_text += f"🔢 *Number:* `{registration_number}`\n"
-                result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                result_text += "❌ No vehicle data found for this registration number."
-            
-            if len(result_text) > 4000:
-                result_text = result_text[:4000] + "\n... (response truncated)"
-            
-            keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
-        else:
-            await msg.edit_text(f"❌ Failed to fetch vehicle details. Please try again later.")
-        
-    except Exception as e:
-        error_msg = sanitize_error_message(str(e))
-        await msg.edit_text(f"❌ An error occurred while fetching data. Please try again later.")
+    # Redirect users to @Osintrtobot for vehicle search
+    keyboard = [[InlineKeyboardButton("🤖 USE @Osintrtobot", url="https://t.me/Osintrtobot")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(
+        f"🚗 *VEHICLE SEARCH*\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"🔢 *Number:* `{registration_number}`\n\n"
+        f"⚠️ Vehicle search is no longer available in this bot.\n\n"
+        f"👉 Please use *@Osintrtobot* for vehicle search instead.\n\n"
+        f"Tap the button below to open it 👇",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
 
 async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_subscribed(update, context):
@@ -649,7 +582,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 *Select an option below:*
 
-🚗 *Vehicle Search* - Comprehensive vehicle info
+🚗 *Vehicle Search* - Use @Osintrtobot
 📱 *Mobile Search* - Mobile number details (Raw JSON)
 🪪 *Aadhaar Search* - Aadhaar number details (Raw JSON)
 📇 *PAN Card* - PAN card details
@@ -658,7 +591,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ━━━━━━━━━━━━━━━━━━━━━━━
 
 💡 *Commands:*
-`/vehicle MH47BG7036`
+`/vehicle MH47BG7036` → Use @Osintrtobot
 `/num 9979512484` - Mobile details (Raw JSON)
 `/aadhar 630971591338` - Aadhaar details (Raw JSON)
 `/pan ACCPA2495F`
@@ -696,9 +629,15 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("❌ You still haven't joined the channel!", show_alert=True)
             
     elif data == "menu_vehicle":
+        keyboard = [[InlineKeyboardButton("🤖 USE @Osintrtobot", url="https://t.me/Osintrtobot")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
-            "🚗 *VEHICLE SEARCH*\n\nPlease send the registration number.\nExample: `MH47BG7036`\n\nType: `/vehicle MH47BG7036`",
-            parse_mode='Markdown'
+            "🚗 *VEHICLE SEARCH*\n\n"
+            "⚠️ Vehicle search is no longer available in this bot.\n\n"
+            "👉 Please use *@Osintrtobot* for vehicle search instead.\n\n"
+            "Tap the button below to open it 👇",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
         )
     elif data == "menu_num":
         await query.edit_message_text(
@@ -738,7 +677,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 *Available Commands:*
 
-🚗 `/vehicle` - Full vehicle search
+🚗 `/vehicle` - Redirects to @Osintrtobot
 📱 `/num` - Mobile number details (Raw JSON)
 🪪 `/aadhar` - Aadhaar number details (Raw JSON)
 📇 `/pan` - PAN card details
@@ -747,7 +686,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ━━━━━━━━━━━━━━━━━━━━━━━
 
 *Examples:*
-`/vehicle MH47BG7036`
+`/vehicle MH47BG7036` → Use @Osintrtobot
 `/num 9979512484` - Mobile details (Raw JSON)
 `/aadhar 630971591338` - Aadhaar details (Raw JSON)
 `/pan ACCPA2495F`
@@ -755,14 +694,14 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 ━━━━━━━━━━━━━━━━━━━━━━━
 
+*About Vehicle Search:*
+• Vehicle search has been moved to @Osintrtobot
+• Please use that bot for all vehicle-related queries
+
 *About Mobile & Aadhaar Search:*
 • API: https://api.paanel.shop/api/gateway.php
 • Key: Seeker
 • Returns raw JSON data from the API
-
-*About Vehicle Search:*
-• `/vehicle` - Search by registration number
-• Returns: Registration Status, Vehicle Specs, Address, Insurance, Additional Details
 
 *About PAN Search:*
 • `/pan` - Search by PAN number
@@ -807,7 +746,7 @@ def main():
     print("✅ All commands loaded successfully")
     print("Commands: /start, /access, /vehicle, /num, /aadhar, /pan, /upi")
     print("\n🚗 Vehicle Search:")
-    print("   - API: https://chuchirandiki.vercel.app/api/vehicle?reg_no=XXXXXXXXXX")
+    print("   - Redirects to @Osintrtobot")
     print("   - Usage: /vehicle MH47BG7036")
     print("\n📱 Mobile Search (RAW JSON):")
     print("   - API: https://api.paanel.shop/api/gateway.php?key=Seeker&number=XXXXXXXXXX")

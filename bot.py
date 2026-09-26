@@ -21,7 +21,6 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = "8920266695:AAFJ3qSyI5TcSXaOPaNqRyljt8od7UrBdVs"
 
 # --- FORCE SUBSCRIBE & ACCESS CONFIGURATION ---
-# Dono channels ki ID aur link yahan daalein
 CHANNELS = [
     {
         "id": "-1003307570375",
@@ -171,13 +170,13 @@ async def check_all_channels(context: ContextTypes.DEFAULT_TYPE, user_id: int):
     for ch in CHANNELS:
         try:
             member = await context.bot.get_chat_member(chat_id=ch["id"], user_id=user_id)
+            logger.info(f"✅ CHECK {ch['name']} ({ch['id']}) → User {user_id} status: {member.status}")
             if member.status not in ['member', 'administrator', 'creator']:
                 not_joined.append(ch)
-            else:
-                logger.info(f"User {user_id} joined channel {ch['id']}")
         except Exception as e:
-            logger.error(f"Membership check failed for {ch['id']}: {e}")
+            logger.error(f"❌ CHECK FAILED for {ch['name']} ({ch['id']}) → {e}")
             not_joined.append(ch)
+    logger.info(f"📋 Not joined channels for {user_id}: {[c['name'] for c in not_joined]}")
     return not_joined
 
 async def is_subscribed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
@@ -321,10 +320,8 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "key": API_KEY,
             "number": number
         }
-        logger.info(f"Calling Paanel API for number: {number}")
         
         response = session.get(NEW_API, params=params, timeout=60)
-        logger.info(f"Paanel API Response Status: {response.status_code}")
         
         if response.status_code == 200:
             try:
@@ -353,7 +350,6 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
                 
             except json.JSONDecodeError as je:
-                logger.error(f"JSON Decode Error: {je}")
                 await msg.edit_text(
                     f"❌ Failed to parse API response.\n\n"
                     f"Raw response (first 500 chars):\n```\n{response.text[:500]}\n```"
@@ -371,8 +367,6 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.edit_text("❌ Connection error. Please check your internet connection.")
     except Exception as e:
         error_msg = sanitize_error_message(str(e))
-        logger.error(f"Error in num_command: {error_msg}")
-        logger.exception(e)
         await msg.edit_text(
             f"❌ An error occurred while fetching data.\n\n"
             f"Error: {error_msg[:200]}"
@@ -416,10 +410,8 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "key": API_KEY,
             "aadhar": aadhaar_number
         }
-        logger.info(f"Calling Paanel API for Aadhaar: {aadhaar_number}")
         
         response = session.get(NEW_API, params=params, timeout=60)
-        logger.info(f"Paanel API Response Status: {response.status_code}")
         
         if response.status_code == 200:
             try:
@@ -448,7 +440,6 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
                 
             except json.JSONDecodeError as je:
-                logger.error(f"JSON Decode Error: {je}")
                 await msg.edit_text(
                     f"❌ Failed to parse API response.\n\n"
                     f"Raw response (first 500 chars):\n```\n{response.text[:500]}\n```"
@@ -466,8 +457,6 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.edit_text("❌ Connection error. Please check your internet connection.")
     except Exception as e:
         error_msg = sanitize_error_message(str(e))
-        logger.error(f"Error in aadhar_command: {error_msg}")
-        logger.exception(e)
         await msg.edit_text(
             f"❌ An error occurred while fetching data.\n\n"
             f"Error: {error_msg[:200]}"
@@ -620,12 +609,12 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ----- SPECIAL HANDLING FOR check_joined -----
     if data == "check_joined":
         user_id = query.from_user.id
+        logger.info(f"🔘 check_joined pressed by {user_id}")
 
-        # Directly check both channels (ignore chat_type logic)
         not_joined = await check_all_channels(context, user_id)
 
         if not not_joined:
-            # User joined all channels -> show menu
+            logger.info(f"✅ User {user_id} joined all channels. Showing menu.")
             try:
                 await query.message.delete()
             except Exception:
@@ -646,7 +635,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=reply_markup
             )
         else:
-            # Show buttons for channels not joined yet (updated list)
+            logger.info(f"❌ User {user_id} still not joined: {[c['name'] for c in not_joined]}")
             keyboard = []
             for ch in not_joined:
                 keyboard.append([InlineKeyboardButton(f"📢 JOIN {ch['name'].upper()}", url=ch["link"])])
@@ -655,10 +644,10 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             try:
                 await query.edit_message_reply_markup(reply_markup=reply_markup)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"edit_message_reply_markup failed: {e}")
 
-            await query.answer("❌ You still haven't joined all channels!", show_alert=True)
+            await query.answer(f"❌ Abhi bhi join nahi kiya: {', '.join([c['name'] for c in not_joined])}", show_alert=True)
         return
 
     # ----- For all other callbacks, check subscription normally -----
@@ -781,24 +770,9 @@ def main():
     
     print("🤖 Bot is starting...")
     print("✅ All commands loaded successfully")
-    print("Commands: /start, /access, /vehicle, /num, /aadhar, /pan, /upi")
     print("\n🔒 Force Subscribe Channels:")
     for ch in CHANNELS:
         print(f"   - {ch['name']}: {ch['link']} (ID: {ch['id']})")
-    print("\n🚗 Vehicle Search:")
-    print("   - Redirects to @Osintrtobot")
-    print("   - Usage: /vehicle MH47BG7036")
-    print("\n📱 Mobile Search (RAW JSON):")
-    print("   - API: https://api.paanel.shop/api/gateway.php?key=Seeker&number=XXXXXXXXXX")
-    print("   - Usage: /num 9979512484")
-    print("\n🪪 Aadhaar Search (RAW JSON):")
-    print("   - API: https://api.paanel.shop/api/gateway.php?key=Seeker&aadhar=XXXXXXXXXX")
-    print("   - Usage: /aadhar 630971591338")
-    print("\n📇 PAN Search:")
-    print("   - Usage: /pan ACCPA2495F")
-    print("\n💳 UPI Validation:")
-    print("   - Usage: /upi vipansharma1931141@okhdfcbank")
-    print("\n🔒 All API endpoints and keys are hidden from users")
     print("\n✅ Bot is ready!")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 

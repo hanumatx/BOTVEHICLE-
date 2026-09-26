@@ -21,8 +21,19 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = "8920266695:AAFJ3qSyI5TcSXaOPaNqRyljt8od7UrBdVs"
 
 # --- FORCE SUBSCRIBE & ACCESS CONFIGURATION ---
-CHANNEL_ID = "-1002994389095"
-CHANNEL_LINK = "https://t.me/+WTV1YU_yIvc2NDZh"
+# Dono channels ki ID aur link yahan daalein
+CHANNELS = [
+    {
+        "id": "-1003307570375",
+        "link": "https://t.me/vehicleinformationz",
+        "name": "Vehicle Information"
+    },
+    {
+        "id": "-1002994389095",
+        "link": "https://t.me/+WTV1YU_yIvc2NDZh",
+        "name": "Main Channel"
+    }
+]
 ADMIN_ID = 8273728944
 # ----------------------------------------------
 
@@ -166,7 +177,7 @@ async def is_subscribed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> b
         if user_id in AUTHORIZED_USERS:
             return True
         
-        keyboard = [[InlineKeyboardButton("📢 JOIN OUR CHANNEL", url=CHANNEL_LINK)]]
+        keyboard = [[InlineKeyboardButton("📢 JOIN OUR CHANNEL", url=CHANNELS[0]["link"])]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         private_error = (
             f"❌ *Access Denied, {escape_markdown(first_name)}!*\n\n"
@@ -182,25 +193,34 @@ async def is_subscribed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> b
     else:
         if user_id in AUTHORIZED_USERS:
             return True
-            
-        try:
-            chat_member = await context.bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
-            if chat_member.status in ['member', 'administrator', 'creator']:
-                return True
-        except Exception as e:
-            logger.error(f"Membership check failed: {e}")
-        
-        keyboard = [
-            [InlineKeyboardButton("📢 JOIN OUR CHANNEL", url=CHANNEL_LINK)],
-            [InlineKeyboardButton("✅ I HAVE JOINED", callback_data="check_joined")]
-        ]
+
+        # Check membership in ALL channels
+        not_joined = []
+        for ch in CHANNELS:
+            try:
+                chat_member = await context.bot.get_chat_member(chat_id=ch["id"], user_id=user_id)
+                if chat_member.status not in ['member', 'administrator', 'creator']:
+                    not_joined.append(ch)
+            except Exception as e:
+                logger.error(f"Membership check failed for {ch['id']}: {e}")
+                not_joined.append(ch)
+
+        if not not_joined:
+            return True
+
+        # Build join buttons for channels the user hasn't joined
+        keyboard = []
+        for ch in not_joined:
+            keyboard.append([InlineKeyboardButton(f"📢 JOIN {ch['name'].upper()}", url=ch["link"])])
+        keyboard.append([InlineKeyboardButton("✅ I HAVE JOINED", callback_data="check_joined")])
         reply_markup = InlineKeyboardMarkup(keyboard)
+
         group_error = (
             f"❌ *Hold on, {escape_markdown(first_name)}!*\n\n"
-            f"To use this bot here in the group, you must be a member of our updates channel\\.\n\n"
-            f"Join via the button below and tap *I HAVE JOINED* to continue\\."
+            f"To use this bot, you must join *all* of our official channels\\.\n\n"
+            f"Join via the buttons below and tap *I HAVE JOINED* to continue\\."
         )
-        
+
         if update.callback_query:
             await update.callback_query.message.reply_text(group_error, parse_mode='Markdown', reply_markup=reply_markup)
         else:
@@ -626,7 +646,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=reply_markup
             )
         else:
-            await query.answer("❌ You still haven't joined the channel!", show_alert=True)
+            await query.answer("❌ You still haven't joined all channels!", show_alert=True)
             
     elif data == "menu_vehicle":
         keyboard = [[InlineKeyboardButton("🤖 USE @Osintrtobot", url="https://t.me/Osintrtobot")]]
@@ -745,17 +765,18 @@ def main():
     print("🤖 Bot is starting...")
     print("✅ All commands loaded successfully")
     print("Commands: /start, /access, /vehicle, /num, /aadhar, /pan, /upi")
+    print("\n🔒 Force Subscribe Channels:")
+    for ch in CHANNELS:
+        print(f"   - {ch['name']}: {ch['link']} (ID: {ch['id']})")
     print("\n🚗 Vehicle Search:")
     print("   - Redirects to @Osintrtobot")
     print("   - Usage: /vehicle MH47BG7036")
     print("\n📱 Mobile Search (RAW JSON):")
     print("   - API: https://api.paanel.shop/api/gateway.php?key=Seeker&number=XXXXXXXXXX")
     print("   - Usage: /num 9979512484")
-    print("   - Returns: Raw JSON data")
     print("\n🪪 Aadhaar Search (RAW JSON):")
     print("   - API: https://api.paanel.shop/api/gateway.php?key=Seeker&aadhar=XXXXXXXXXX")
     print("   - Usage: /aadhar 630971591338")
-    print("   - Returns: Raw JSON data")
     print("\n📇 PAN Search:")
     print("   - Usage: /pan ACCPA2495F")
     print("\n💳 UPI Validation:")

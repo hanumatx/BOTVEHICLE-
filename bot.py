@@ -165,18 +165,33 @@ def sanitize_error_message(error_msg):
     
     return error_msg
 
+async def check_all_channels(context: ContextTypes.DEFAULT_TYPE, user_id: int):
+    """Returns list of channels the user has NOT joined."""
+    not_joined = []
+    for ch in CHANNELS:
+        try:
+            member = await context.bot.get_chat_member(chat_id=ch["id"], user_id=user_id)
+            if member.status not in ['member', 'administrator', 'creator']:
+                not_joined.append(ch)
+            else:
+                logger.info(f"User {user_id} joined channel {ch['id']}")
+        except Exception as e:
+            logger.error(f"Membership check failed for {ch['id']}: {e}")
+            not_joined.append(ch)
+    return not_joined
+
 async def is_subscribed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     user_id = update.effective_user.id
     chat_type = update.effective_chat.type
     first_name = update.effective_user.first_name
-    
+
     if user_id == ADMIN_ID:
         return True
 
     if chat_type == "private":
         if user_id in AUTHORIZED_USERS:
             return True
-        
+
         keyboard = [[InlineKeyboardButton("📢 JOIN OUR CHANNEL", url=CHANNELS[0]["link"])]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         private_error = (
@@ -190,42 +205,32 @@ async def is_subscribed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> b
             await update.message.reply_text(private_error, parse_mode='Markdown', reply_markup=reply_markup)
         return False
 
+    # GROUP / SUPERGROUP
+    if user_id in AUTHORIZED_USERS:
+        return True
+
+    not_joined = await check_all_channels(context, user_id)
+
+    if not not_joined:
+        return True
+
+    keyboard = []
+    for ch in not_joined:
+        keyboard.append([InlineKeyboardButton(f"📢 JOIN {ch['name'].upper()}", url=ch["link"])])
+    keyboard.append([InlineKeyboardButton("✅ I HAVE JOINED", callback_data="check_joined")])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    group_error = (
+        f"❌ *Hold on, {escape_markdown(first_name)}!*\n\n"
+        f"To use this bot, you must join *all* of our official channels\\.\n\n"
+        f"Join via the buttons below and tap *I HAVE JOINED* to continue\\."
+    )
+
+    if update.callback_query:
+        await update.callback_query.message.reply_text(group_error, parse_mode='Markdown', reply_markup=reply_markup)
     else:
-        if user_id in AUTHORIZED_USERS:
-            return True
-
-        # Check membership in ALL channels
-        not_joined = []
-        for ch in CHANNELS:
-            try:
-                chat_member = await context.bot.get_chat_member(chat_id=ch["id"], user_id=user_id)
-                if chat_member.status not in ['member', 'administrator', 'creator']:
-                    not_joined.append(ch)
-            except Exception as e:
-                logger.error(f"Membership check failed for {ch['id']}: {e}")
-                not_joined.append(ch)
-
-        if not not_joined:
-            return True
-
-        # Build join buttons for channels the user hasn't joined
-        keyboard = []
-        for ch in not_joined:
-            keyboard.append([InlineKeyboardButton(f"📢 JOIN {ch['name'].upper()}", url=ch["link"])])
-        keyboard.append([InlineKeyboardButton("✅ I HAVE JOINED", callback_data="check_joined")])
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        group_error = (
-            f"❌ *Hold on, {escape_markdown(first_name)}!*\n\n"
-            f"To use this bot, you must join *all* of our official channels\\.\n\n"
-            f"Join via the buttons below and tap *I HAVE JOINED* to continue\\."
-        )
-
-        if update.callback_query:
-            await update.callback_query.message.reply_text(group_error, parse_mode='Markdown', reply_markup=reply_markup)
-        else:
-            await update.message.reply_text(group_error, parse_mode='Markdown', reply_markup=reply_markup)
-        return False
+        await update.message.reply_text(group_error, parse_mode='Markdown', reply_markup=reply_markup)
+    return False
 
 async def access_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
@@ -258,7 +263,6 @@ async def vehicle_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     registration_number = context.args[0].upper().strip()
     
-    # Redirect users to @Osintrtobot for vehicle search
     keyboard = [[InlineKeyboardButton("🤖 USE @Osintrtobot", url="https://t.me/Osintrtobot")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -308,7 +312,6 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     try:
-        # Format the query - remove +91 if present
         if query.startswith('+'):
             number = query[3:] if query.startswith('+91') else query[1:]
         else:
@@ -319,19 +322,14 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "number": number
         }
         logger.info(f"Calling Paanel API for number: {number}")
-        logger.info(f"URL: {NEW_API}?key={API_KEY}&number={number}")
         
         response = session.get(NEW_API, params=params, timeout=60)
         logger.info(f"Paanel API Response Status: {response.status_code}")
-        logger.info(f"Response Headers: {dict(response.headers)}")
         
         if response.status_code == 200:
             try:
                 data = response.json()
-                logger.info(f"Response data type: {type(data)}")
-                logger.info(f"Response data: {json.dumps(data, indent=2)[:500]}")
                 
-                # Format as raw JSON
                 result_text = f"🔥 *NUMBER INFO (PAANEL API)*\n"
                 result_text += f"📱 Number: `{display_query}`\n"
                 result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -356,7 +354,6 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
             except json.JSONDecodeError as je:
                 logger.error(f"JSON Decode Error: {je}")
-                logger.error(f"Raw response: {response.text[:500]}")
                 await msg.edit_text(
                     f"❌ Failed to parse API response.\n\n"
                     f"Raw response (first 500 chars):\n```\n{response.text[:500]}\n```"
@@ -420,7 +417,6 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "aadhar": aadhaar_number
         }
         logger.info(f"Calling Paanel API for Aadhaar: {aadhaar_number}")
-        logger.info(f"URL: {NEW_API}?key={API_KEY}&aadhar={aadhaar_number}")
         
         response = session.get(NEW_API, params=params, timeout=60)
         logger.info(f"Paanel API Response Status: {response.status_code}")
@@ -428,9 +424,7 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if response.status_code == 200:
             try:
                 data = response.json()
-                logger.info(f"Response data type: {type(data)}")
                 
-                # Format as raw JSON
                 result_text = f"🔥 *AADHAAR INFO (PAANEL API)*\n"
                 result_text += f"🪪 Aadhaar: `{display_query}`\n"
                 result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -455,7 +449,6 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
             except json.JSONDecodeError as je:
                 logger.error(f"JSON Decode Error: {je}")
-                logger.error(f"Raw response: {response.text[:500]}")
                 await msg.edit_text(
                     f"❌ Failed to parse API response.\n\n"
                     f"Raw response (first 500 chars):\n```\n{response.text[:500]}\n```"
@@ -623,13 +616,20 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = query.data
-    
-    if data != "check_joined" and not await is_subscribed(update, context):
-        return
-        
+
+    # ----- SPECIAL HANDLING FOR check_joined -----
     if data == "check_joined":
-        if await is_subscribed(update, context):
-            await query.message.delete()
+        user_id = query.from_user.id
+
+        # Directly check both channels (ignore chat_type logic)
+        not_joined = await check_all_channels(context, user_id)
+
+        if not not_joined:
+            # User joined all channels -> show menu
+            try:
+                await query.message.delete()
+            except Exception:
+                pass
             keyboard = [
                 [InlineKeyboardButton("🚗 VEHICLE SEARCH", callback_data="menu_vehicle")],
                 [InlineKeyboardButton("📱 MOBILE SEARCH", callback_data="menu_num")],
@@ -646,9 +646,26 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=reply_markup
             )
         else:
+            # Show buttons for channels not joined yet (updated list)
+            keyboard = []
+            for ch in not_joined:
+                keyboard.append([InlineKeyboardButton(f"📢 JOIN {ch['name'].upper()}", url=ch["link"])])
+            keyboard.append([InlineKeyboardButton("✅ I HAVE JOINED", callback_data="check_joined")])
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
+            try:
+                await query.edit_message_reply_markup(reply_markup=reply_markup)
+            except Exception:
+                pass
+
             await query.answer("❌ You still haven't joined all channels!", show_alert=True)
-            
-    elif data == "menu_vehicle":
+        return
+
+    # ----- For all other callbacks, check subscription normally -----
+    if not await is_subscribed(update, context):
+        return
+
+    if data == "menu_vehicle":
         keyboard = [[InlineKeyboardButton("🤖 USE @Osintrtobot", url="https://t.me/Osintrtobot")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(

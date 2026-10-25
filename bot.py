@@ -55,8 +55,10 @@ AUTHORIZED_USERS = load_auth_users()
 
 # API Endpoints
 VEHICLE_API = "https://chuchirandiki.vercel.app/api/vehicle"
-NEW_API = "https://api.paanel.shop/api/gateway.php"
-API_KEY = "Seeker"
+NEW_API_BASE = "https://planned-conclusion-move-por.trycloudflare.com"
+NUMBER_API = f"{NEW_API_BASE}/search/number"
+AADHAR_API = f"{NEW_API_BASE}/search/aadhar"   # ⚠️ verify path
+API_KEY = "mysecretkey123"
 SPINNY_URL = "https://api.spinny.com/v3/api/vehicle/full-pan-details/"
 UPI_API = "https://api.truebalance.cc/v2/v2/payment/validateVPA"
 SPINNY_AUTH_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgzNDM5MDY2LCJqdGkiOiIxOTUyOTJkNDdiNjE0M2M2YjExNGUyOWQwMjc1OTA1NSIsInVzZXJfaWQiOjI3ODQxMzg3fQ.uAQg937MTs_4Dz7rgGqX28xVX7liEx6jIm0-1SL2SNc"
@@ -153,7 +155,7 @@ def sanitize_error_message(error_msg):
         r'https://chuchirandiki\.vercel\.app[^\s]*',
         r'https://api\.spinny\.com[^\s]*',
         r'https://api\.truebalance\.cc[^\s]*',
-        r'https://api\.paanel\.shop[^\s]*',
+        r'https://planned-conclusion-move-por\.trycloudflare\.com[^\s]*',
     ]
     for pattern in api_patterns:
         error_msg = re.sub(pattern, '[API_ENDPOINT]', error_msg)
@@ -321,13 +323,13 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "number": number
         }
         
-        response = session.get(NEW_API, params=params, timeout=60)
+        response = session.get(NUMBER_API, params=params, timeout=60)
         
         if response.status_code == 200:
             try:
                 data = response.json()
                 
-                result_text = f"🔥 *NUMBER INFO (PAANEL API)*\n"
+                result_text = f"🔥 *NUMBER INFO*\n"
                 result_text += f"📱 Number: `{display_query}`\n"
                 result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
                 result_text += "```json\n"
@@ -338,7 +340,7 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     json_str = json.dumps(data, indent=2, ensure_ascii=False)
                     if len(json_str) > 3500:
                         json_str = json_str[:3500] + "\n... (truncated)"
-                    result_text = f"🔥 *NUMBER INFO (PAANEL API)*\n"
+                    result_text = f"🔥 *NUMBER INFO*\n"
                     result_text += f"📱 Number: `{display_query}`\n"
                     result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
                     result_text += "```json\n"
@@ -349,7 +351,7 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
                 
-            except json.JSONDecodeError as je:
+            except json.JSONDecodeError:
                 await msg.edit_text(
                     f"❌ Failed to parse API response.\n\n"
                     f"Raw response (first 500 chars):\n```\n{response.text[:500]}\n```"
@@ -408,16 +410,16 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         params = {
             "key": API_KEY,
-            "aadhar": aadhaar_number
+            "number": aadhaar_number      # ⚠️ verify param name (number vs aadhar)
         }
         
-        response = session.get(NEW_API, params=params, timeout=60)
+        response = session.get(AADHAR_API, params=params, timeout=60)
         
         if response.status_code == 200:
             try:
                 data = response.json()
                 
-                result_text = f"🔥 *AADHAAR INFO (PAANEL API)*\n"
+                result_text = f"🔥 *AADHAAR INFO*\n"
                 result_text += f"🪪 Aadhaar: `{display_query}`\n"
                 result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
                 result_text += "```json\n"
@@ -428,7 +430,7 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     json_str = json.dumps(data, indent=2, ensure_ascii=False)
                     if len(json_str) > 3500:
                         json_str = json_str[:3500] + "\n... (truncated)"
-                    result_text = f"🔥 *AADHAAR INFO (PAANEL API)*\n"
+                    result_text = f"🔥 *AADHAAR INFO*\n"
                     result_text += f"🪪 Aadhaar: `{display_query}`\n"
                     result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
                     result_text += "```json\n"
@@ -439,7 +441,7 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
                 
-            except json.JSONDecodeError as je:
+            except json.JSONDecodeError:
                 await msg.edit_text(
                     f"❌ Failed to parse API response.\n\n"
                     f"Raw response (first 500 chars):\n```\n{response.text[:500]}\n```"
@@ -510,7 +512,6 @@ async def pan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await msg.edit_text(f"❌ Failed to fetch PAN details. Please try again later.")
     except Exception as e:
-        error_msg = sanitize_error_message(str(e))
         await msg.edit_text(f"❌ An error occurred while fetching data. Please try again later.")
 
 async def upi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -672,7 +673,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "*Usage:*\n"
             "`/num 9979512484`\n"
             "`/num +919979512484`\n\n"
-            "*Returns raw JSON data from Paanel API*",
+            "*Returns raw JSON data from the API*",
             parse_mode='Markdown'
         )
     elif data == "menu_aadhar":
@@ -682,7 +683,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "*Usage:*\n"
             "`/aadhar 630971591338`\n\n"
             "*Note:* Aadhaar must be exactly 12 digits.\n\n"
-            "*Returns raw JSON data from Paanel API*",
+            "*Returns raw JSON data from the API*",
             parse_mode='Markdown'
         )
     elif data == "menu_pan":
@@ -725,8 +726,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • Please use that bot for all vehicle-related queries
 
 *About Mobile & Aadhaar Search:*
-• API: https://api.paanel.shop/api/gateway.php
-• Key: Seeker
+• API: https://planned-conclusion-move-por.trycloudflare.com
+• Key: mysecretkey123
 • Returns raw JSON data from the API
 
 *About PAN Search:*

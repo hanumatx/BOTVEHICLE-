@@ -17,8 +17,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Bot token
+# Bot token & Developer Info
 BOT_TOKEN = "8920266695:AAFJ3qSyI5TcSXaOPaNqRyljt8od7UrBdVs"
+DEVELOPER_NAME = "encode"
 
 # --- FORCE SUBSCRIBE & ACCESS CONFIGURATION ---
 CHANNELS = [
@@ -86,6 +87,22 @@ CITIES = [
     "Pune", "Jaipur", "Lucknow", "Nagpur", "Indore", "Bhopal", "Surat", "Vadodara",
     "Patna", "Ludhiana", "Agra", "Nashik", "Ranchi"
 ]
+
+def inject_developer(data):
+    """Adds or overwrites developer keys in JSON data with DEVELOPER_NAME."""
+    dev_keys = {'developer', 'dev', 'credit', 'credits', 'owner', 'created_by', 'author', 'api_by'}
+    if isinstance(data, dict):
+        new_dict = {}
+        for k, v in data.items():
+            if k.lower() in dev_keys:
+                new_dict[k] = DEVELOPER_NAME
+            else:
+                new_dict[k] = inject_developer(v)
+        new_dict["developer"] = DEVELOPER_NAME
+        return new_dict
+    elif isinstance(data, list):
+        return [inject_developer(item) for item in data]
+    return data
 
 def generate_random_micr():
     return ''.join(str(random.randint(0, 9)) for _ in range(9))
@@ -200,7 +217,8 @@ async def is_subscribed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> b
         private_error = (
             f"❌ *Access Denied, {escape_markdown(first_name)}!*\n\n"
             f"This bot cannot be used directly inside private DMs\\.\n"
-            f"Please click the link below to join our official channel and use it there\\!"
+            f"Please click the link below to join our official channel and use it there\\!\n\n"
+            f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
         )
         if update.callback_query:
             await update.callback_query.message.reply_text(private_error, parse_mode='Markdown', reply_markup=reply_markup)
@@ -226,7 +244,8 @@ async def is_subscribed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> b
     group_error = (
         f"❌ *Hold on, {escape_markdown(first_name)}!*\n\n"
         f"To use this bot, you must join *all* of our official channels\\.\n\n"
-        f"Join via the buttons below and tap *I HAVE JOINED* to continue\\."
+        f"Join via the buttons below and tap *I HAVE JOINED* to continue\\.\n\n"
+        f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
     )
 
     if update.callback_query:
@@ -248,7 +267,7 @@ async def access_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         target_id = int(context.args[0])
         AUTHORIZED_USERS.add(target_id)
         save_auth_users(AUTHORIZED_USERS)
-        await update.message.reply_text(f"✅ User `{target_id}` has been approved for Private DM access.", parse_mode='Markdown')
+        await update.message.reply_text(f"✅ User `{target_id}` has been approved for Private DM access.\n\n👨‍💻 *Developer:* `{DEVELOPER_NAME}`", parse_mode='Markdown')
     except ValueError:
         await update.message.reply_text("❌ Invalid User ID format. Numbers only.")
 
@@ -275,7 +294,8 @@ async def vehicle_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🔢 *Number:* `{registration_number}`\n\n"
         f"⚠️ Vehicle search is no longer available in this bot.\n\n"
         f"👉 Please use *@Osintrtobot* for vehicle search instead.\n\n"
-        f"Tap the button below to open it 👇",
+        f"Tap the button below to open it 👇\n\n"
+        f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`",
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
@@ -329,25 +349,18 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if response.status_code == 200:
             try:
-                data = response.json()
+                data = inject_developer(response.json())
+                json_str = json.dumps(data, indent=2, ensure_ascii=False)
+                if len(json_str) > 3500:
+                    json_str = json_str[:3500] + "\n... (truncated)"
                 
-                result_text = f"🔥 *NUMBER INFO*\n"
-                result_text += f"📱 Number: `{display_query}`\n"
-                result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                result_text += "```json\n"
-                result_text += json.dumps(data, indent=2, ensure_ascii=False)
-                result_text += "\n```"
-                
-                if len(result_text) > 4000:
-                    json_str = json.dumps(data, indent=2, ensure_ascii=False)
-                    if len(json_str) > 3500:
-                        json_str = json_str[:3500] + "\n... (truncated)"
-                    result_text = f"🔥 *NUMBER INFO*\n"
-                    result_text += f"📱 Number: `{display_query}`\n"
-                    result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                    result_text += "```json\n"
-                    result_text += json_str
-                    result_text += "\n```"
+                result_text = (
+                    f"🔥 *NUMBER INFO*\n"
+                    f"📱 Number: `{display_query}`\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                    f"```json\n{json_str}\n```\n\n"
+                    f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
+                )
                 
                 keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
                 reply_markup = InlineKeyboardMarkup(keyboard)
@@ -356,24 +369,27 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except json.JSONDecodeError:
                 await msg.edit_text(
                     f"❌ Failed to parse API response.\n\n"
-                    f"Raw response (first 500 chars):\n```\n{response.text[:500]}\n```"
+                    f"Raw response (first 500 chars):\n```\n{response.text[:500]}\n```\n\n"
+                    f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
                 )
         else:
             await msg.edit_text(
                 f"❌ Failed to fetch number details.\n"
                 f"Status Code: {response.status_code}\n"
-                f"Response: {response.text[:200]}"
+                f"Response: {response.text[:200]}\n\n"
+                f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
             )
         
     except requests.exceptions.Timeout:
-        await msg.edit_text("❌ Request timed out. The API server might be slow or down.")
+        await msg.edit_text(f"❌ Request timed out. The API server might be slow or down.\n\n👨‍💻 *Developer:* `{DEVELOPER_NAME}`")
     except requests.exceptions.ConnectionError:
-        await msg.edit_text("❌ Connection error. Please check your internet connection.")
+        await msg.edit_text(f"❌ Connection error. Please check your internet connection.\n\n👨‍💻 *Developer:* `{DEVELOPER_NAME}`")
     except Exception as e:
         error_msg = sanitize_error_message(str(e))
         await msg.edit_text(
             f"❌ An error occurred while fetching data.\n\n"
-            f"Error: {error_msg[:200]}"
+            f"Error: {error_msg[:200]}\n\n"
+            f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
         )
 
 async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -419,25 +435,18 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if response.status_code == 200:
             try:
-                data = response.json()
+                data = inject_developer(response.json())
+                json_str = json.dumps(data, indent=2, ensure_ascii=False)
+                if len(json_str) > 3500:
+                    json_str = json_str[:3500] + "\n... (truncated)"
                 
-                result_text = f"🔥 *AADHAAR INFO*\n"
-                result_text += f"🪪 Aadhaar: `{display_query}`\n"
-                result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                result_text += "```json\n"
-                result_text += json.dumps(data, indent=2, ensure_ascii=False)
-                result_text += "\n```"
-                
-                if len(result_text) > 4000:
-                    json_str = json.dumps(data, indent=2, ensure_ascii=False)
-                    if len(json_str) > 3500:
-                        json_str = json_str[:3500] + "\n... (truncated)"
-                    result_text = f"🔥 *AADHAAR INFO*\n"
-                    result_text += f"🪪 Aadhaar: `{display_query}`\n"
-                    result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                    result_text += "```json\n"
-                    result_text += json_str
-                    result_text += "\n```"
+                result_text = (
+                    f"🔥 *AADHAAR INFO*\n"
+                    f"🪪 Aadhaar: `{display_query}`\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                    f"```json\n{json_str}\n```\n\n"
+                    f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
+                )
                 
                 keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
                 reply_markup = InlineKeyboardMarkup(keyboard)
@@ -446,24 +455,27 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except json.JSONDecodeError:
                 await msg.edit_text(
                     f"❌ Failed to parse API response.\n\n"
-                    f"Raw response (first 500 chars):\n```\n{response.text[:500]}\n```"
+                    f"Raw response (first 500 chars):\n```\n{response.text[:500]}\n```\n\n"
+                    f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
                 )
         else:
             await msg.edit_text(
                 f"❌ Failed to fetch Aadhaar details.\n"
                 f"Status Code: {response.status_code}\n"
-                f"Response: {response.text[:200]}"
+                f"Response: {response.text[:200]}\n\n"
+                f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
             )
         
     except requests.exceptions.Timeout:
-        await msg.edit_text("❌ Request timed out. The API server might be slow or down.")
+        await msg.edit_text(f"❌ Request timed out. The API server might be slow or down.\n\n👨‍💻 *Developer:* `{DEVELOPER_NAME}`")
     except requests.exceptions.ConnectionError:
-        await msg.edit_text("❌ Connection error. Please check your internet connection.")
+        await msg.edit_text(f"❌ Connection error. Please check your internet connection.\n\n👨‍💻 *Developer:* `{DEVELOPER_NAME}`")
     except Exception as e:
         error_msg = sanitize_error_message(str(e))
         await msg.edit_text(
             f"❌ An error occurred while fetching data.\n\n"
-            f"Error: {error_msg[:200]}"
+            f"Error: {error_msg[:200]}\n\n"
+            f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
         )
 
 async def family_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -508,25 +520,18 @@ async def family_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if response.status_code == 200:
             try:
-                data = response.json()
+                data = inject_developer(response.json())
+                json_str = json.dumps(data, indent=2, ensure_ascii=False)
+                if len(json_str) > 3500:
+                    json_str = json_str[:3500] + "\n... (truncated)"
                 
-                result_text = f"👨‍👩‍👧‍👦 *AADHAAR TO FAMILY INFO*\n"
-                result_text += f"🪪 ID: `{display_query}`\n"
-                result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                result_text += "```json\n"
-                result_text += json.dumps(data, indent=2, ensure_ascii=False)
-                result_text += "\n```"
-                
-                if len(result_text) > 4000:
-                    json_str = json.dumps(data, indent=2, ensure_ascii=False)
-                    if len(json_str) > 3500:
-                        json_str = json_str[:3500] + "\n... (truncated)"
-                    result_text = f"👨‍👩‍👧‍👦 *AADHAAR TO FAMILY INFO*\n"
-                    result_text += f"🪪 ID: `{display_query}`\n"
-                    result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                    result_text += "```json\n"
-                    result_text += json_str
-                    result_text += "\n```"
+                result_text = (
+                    f"👨‍👩‍👧‍👦 *AADHAAR TO FAMILY INFO*\n"
+                    f"🪪 ID: `{display_query}`\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                    f"```json\n{json_str}\n```\n\n"
+                    f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
+                )
                 
                 keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
                 reply_markup = InlineKeyboardMarkup(keyboard)
@@ -538,7 +543,8 @@ async def family_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"👨‍👩‍👧‍👦 *AADHAAR TO FAMILY INFO (RAW)*\n"
                     f"🪪 ID: `{display_query}`\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                    f"```\n{raw_text}\n```"
+                    f"```\n{raw_text}\n```\n\n"
+                    f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
                 )
                 keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
                 reply_markup = InlineKeyboardMarkup(keyboard)
@@ -547,18 +553,20 @@ async def family_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await msg.edit_text(
                 f"❌ Failed to fetch Family details.\n"
                 f"Status Code: {response.status_code}\n"
-                f"Response: {response.text[:200]}"
+                f"Response: {response.text[:200]}\n\n"
+                f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
             )
         
     except requests.exceptions.Timeout:
-        await msg.edit_text("❌ Request timed out. The API server might be slow or down.")
+        await msg.edit_text(f"❌ Request timed out. The API server might be slow or down.\n\n👨‍💻 *Developer:* `{DEVELOPER_NAME}`")
     except requests.exceptions.ConnectionError:
-        await msg.edit_text("❌ Connection error. Please check your internet connection.")
+        await msg.edit_text(f"❌ Connection error. Please check your internet connection.\n\n👨‍💻 *Developer:* `{DEVELOPER_NAME}`")
     except Exception as e:
         error_msg = sanitize_error_message(str(e))
         await msg.edit_text(
             f"❌ An error occurred while fetching data.\n\n"
-            f"Error: {error_msg[:200]}"
+            f"Error: {error_msg[:200]}\n\n"
+            f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
         )
 
 async def pan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -580,6 +588,7 @@ async def pan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             data = response.json()
             if data.get('is_success') and data.get('ok'):
                 pan_data = data.get('data', {})
+                pan_data = inject_developer(pan_data)
                 result_text = f"""
 📇 *PAN CARD DETAILS*
 ━━━━━━━━━━━━━━━━━━━━━━━
@@ -598,16 +607,18 @@ async def pan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ├ Valid: {'✅' if pan_data.get('is_valid') else '❌'}
 ├ Aadhaar Linked: {'✅' if pan_data.get('is_aadhaar_linked') else '❌'}
 └ Individual: {'✅' if pan_data.get('is_individual') else '❌'}
+
+👨‍💻 *Developer:* `{DEVELOPER_NAME}`
                 """
                 keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
             else:
-                await msg.edit_text(f"❌ No data found for PAN `{pan_number}`")
+                await msg.edit_text(f"❌ No data found for PAN `{pan_number}`\n\n👨‍💻 *Developer:* `{DEVELOPER_NAME}`", parse_mode='Markdown')
         else:
-            await msg.edit_text(f"❌ Failed to fetch PAN details. Please try again later.")
+            await msg.edit_text(f"❌ Failed to fetch PAN details. Please try again later.\n\n👨‍💻 *Developer:* `{DEVELOPER_NAME}`", parse_mode='Markdown')
     except Exception as e:
-        await msg.edit_text(f"❌ An error occurred while fetching data. Please try again later.")
+        await msg.edit_text(f"❌ An error occurred while fetching data. Please try again later.\n\n👨‍💻 *Developer:* `{DEVELOPER_NAME}`", parse_mode='Markdown')
 
 async def upi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_subscribed(update, context):
@@ -650,7 +661,8 @@ async def upi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"├ Name: {escape_markdown(name_from_vpa.title())}\n"
             f"├ Mobile: `{random_phone}`\n"
             f"└ Email: `{random_email}`\n\n"
-            f"✅ *UPI is active and ready for transactions*"
+            f"✅ *UPI is active and ready for transactions*\n\n"
+            f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
         )
         
         keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
@@ -658,7 +670,7 @@ async def upi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
     except Exception as e:
         error_msg = sanitize_error_message(str(e))
-        await msg.edit_text(f"❌ An error occurred while validating UPI. Please try again later.")
+        await msg.edit_text(f"❌ An error occurred while validating UPI. Please try again later.\n\n👨‍💻 *Developer:* `{DEVELOPER_NAME}`", parse_mode='Markdown')
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_subscribed(update, context):
@@ -674,7 +686,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("❓ HELP / COMMANDS", callback_data="menu_help")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    welcome_text = """
+    welcome_text = f"""
 🚀 *WELCOME TO SEARCH BOT* 🚀
 
 ━━━━━━━━━━━━━━━━━━━━━━━
@@ -697,6 +709,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 `/family [12_DIGIT_AADHAAR]` - Family details (Raw JSON)
 `/pan ACCPA2495F`
 `/upi vipansharma1931141@okhdfcbank`
+
+━━━━━━━━━━━━━━━━━━━━━━━
+👨‍💻 *Developer:* `{DEVELOPER_NAME}`
     """
     await update.message.reply_text(welcome_text, parse_mode='Markdown', reply_markup=reply_markup)
 
@@ -730,7 +745,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup = InlineKeyboardMarkup(keyboard)
             await context.bot.send_message(
                 chat_id=query.message.chat_id,
-                text="🚀 *WELCOME TO SEARCH BOT* 🚀\n\n━━━━━━━━━━━━━━━━━━━━━━━\n\n*Select an option below:*",
+                text=f"🚀 *WELCOME TO SEARCH BOT* 🚀\n\n━━━━━━━━━━━━━━━━━━━━━━━\n\n*Select an option below:*\n\n👨‍💻 *Developer:* `{DEVELOPER_NAME}`",
                 parse_mode='Markdown',
                 reply_markup=reply_markup
             )
@@ -758,55 +773,59 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [[InlineKeyboardButton("🤖 USE @Osintrtobot", url="https://t.me/Osintrtobot")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
-            "🚗 *VEHICLE SEARCH*\n\n"
-            "⚠️ Vehicle search is no longer available in this bot.\n\n"
-            "👉 Please use *@Osintrtobot* for vehicle search instead.\n\n"
-            "Tap the button below to open it 👇",
+            f"🚗 *VEHICLE SEARCH*\n\n"
+            f"⚠️ Vehicle search is no longer available in this bot.\n\n"
+            f"👉 Please use *@Osintrtobot* for vehicle search instead.\n\n"
+            f"Tap the button below to open it 👇\n\n"
+            f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`",
             parse_mode='Markdown',
             reply_markup=reply_markup
         )
     elif data == "menu_num":
         await query.edit_message_text(
-            "📱 *MOBILE SEARCH (RAW JSON)*\n\n"
-            "Search details for any mobile number.\n\n"
-            "*Usage:*\n"
-            "`/num 9979512484`\n"
-            "`/num +919979512484`\n\n"
-            "*Returns raw JSON data from the API*",
+            f"📱 *MOBILE SEARCH (RAW JSON)*\n\n"
+            f"Search details for any mobile number.\n\n"
+            f"*Usage:*\n"
+            f"`/num 9979512484`\n"
+            f"`/num +919979512484`\n\n"
+            f"*Returns raw JSON data from the API*\n\n"
+            f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`",
             parse_mode='Markdown'
         )
     elif data == "menu_aadhar":
         await query.edit_message_text(
-            "🪪 *AADHAAR SEARCH (RAW JSON)*\n\n"
-            "Search details by Aadhaar number.\n\n"
-            "*Usage:*\n"
-            "`/aadhar [12_DIGIT_AADHAAR]`\n\n"
-            "*Note:* Aadhaar must be exactly 12 digits.\n\n"
-            "*Returns raw JSON data from the API*",
+            f"🪪 *AADHAAR SEARCH (RAW JSON)*\n\n"
+            f"Search details by Aadhaar number.\n\n"
+            f"*Usage:*\n"
+            f"`/aadhar [12_DIGIT_AADHAAR]`\n\n"
+            f"*Note:* Aadhaar must be exactly 12 digits.\n\n"
+            f"*Returns raw JSON data from the API*\n\n"
+            f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`",
             parse_mode='Markdown'
         )
     elif data == "menu_family":
         await query.edit_message_text(
-            "👨‍👩‍👧‍👦 *AADHAAR TO FAMILY SEARCH (RAW JSON)*\n\n"
-            "Search family details by Aadhaar number.\n\n"
-            "*Usage:*\n"
-            "`/family [12_DIGIT_AADHAAR]`\n\n"
-            "*Note:* Aadhaar must be exactly 12 digits.\n\n"
-            "*Returns raw JSON data from the API*",
+            f"👨‍👩‍👧‍👦 *AADHAAR TO FAMILY SEARCH (RAW JSON)*\n\n"
+            f"Search family details by Aadhaar number.\n\n"
+            f"*Usage:*\n"
+            f"`/family [12_DIGIT_AADHAAR]`\n\n"
+            f"*Note:* Aadhaar must be exactly 12 digits.\n\n"
+            f"*Returns raw JSON data from the API*\n\n"
+            f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`",
             parse_mode='Markdown'
         )
     elif data == "menu_pan":
         await query.edit_message_text(
-            "📇 *PAN CARD SEARCH*\n\nPlease send the PAN number.\nExample: `ACCPA2495F`\n\nType: `/pan ACCPA2495F`",
+            f"📇 *PAN CARD SEARCH*\n\nPlease send the PAN number.\nExample: `ACCPA2495F`\n\nType: `/pan ACCPA2495F`\n\n👨‍💻 *Developer:* `{DEVELOPER_NAME}`",
             parse_mode='Markdown'
         )
     elif data == "menu_upi":
         await query.edit_message_text(
-            "💳 *UPI VALIDATION*\n\nPlease send the UPI ID / VPA.\nExample: `vipansharma1931141@okhdfcbank`\n\nType: `/upi vipansharma1931141@okhdfcbank`",
+            f"💳 *UPI VALIDATION*\n\nPlease send the UPI ID / VPA.\nExample: `vipansharma1931141@okhdfcbank`\n\nType: `/upi vipansharma1931141@okhdfcbank`\n\n👨‍💻 *Developer:* `{DEVELOPER_NAME}`",
             parse_mode='Markdown'
         )
     elif data == "menu_help":
-        help_text = """
+        help_text = f"""
 ❓ *HELP & COMMANDS*
 
 ━━━━━━━━━━━━━━━━━━━━━━━
@@ -846,6 +865,9 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *About UPI Validation:*
 - `/upi` - Validate UPI ID / VPA
 - Returns bank details and account holder information
+
+━━━━━━━━━━━━━━━━━━━━━━━
+👨‍💻 *Developer:* `{DEVELOPER_NAME}`
         """
         keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -862,7 +884,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
-            "🚀 *WELCOME TO SEARCH BOT* 🚀\n\n━━━━━━━━━━━━━━━━━━━━━━━\n\n*Select an option below:*",
+            f"🚀 *WELCOME TO SEARCH BOT* 🚀\n\n━━━━━━━━━━━━━━━━━━━━━━━\n\n*Select an option below:*\n\n👨‍💻 *Developer:* `{DEVELOPER_NAME}`",
             parse_mode='Markdown',
             reply_markup=reply_markup
         )
@@ -882,6 +904,7 @@ def main():
     
     print("🤖 Bot is starting...")
     print("✅ All commands loaded successfully")
+    print(f"👨‍💻 Developer: {DEVELOPER_NAME}")
     print("\n🔒 Force Subscribe Channels:")
     for ch in CHANNELS:
         print(f"   - {ch['name']}: {ch['link']} (ID: {ch['id']})")

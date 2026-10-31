@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 # Bot token & Developer Info
 BOT_TOKEN = "8920266695:AAFJ3qSyI5TcSXaOPaNqRyljt8od7UrBdVs"
-DEVELOPER_NAME = "encode"
+DEVELOPER_NAME = "CHUT KI RANI "
 
 # --- FORCE SUBSCRIBE & ACCESS CONFIGURATION ---
 CHANNELS = [

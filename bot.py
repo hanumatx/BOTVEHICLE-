@@ -57,7 +57,8 @@ AUTHORIZED_USERS = load_auth_users()
 VEHICLE_API = "https://chuchirandiki.vercel.app/api/vehicle"
 NEW_API_BASE = "https://planned-conclusion-move-por.trycloudflare.com"
 NUMBER_API = f"{NEW_API_BASE}/search/number"
-AADHAR_API = f"{NEW_API_BASE}/search/aadhar"   # ⚠️ verify path
+AADHAR_API = f"{NEW_API_BASE}/search/aadhar"
+FAMILY_API = "https://adhar-to-family-psi.vercel.app/family"
 API_KEY = "mysecretkey123"
 SPINNY_URL = "https://api.spinny.com/v3/api/vehicle/full-pan-details/"
 UPI_API = "https://api.truebalance.cc/v2/v2/payment/validateVPA"
@@ -156,6 +157,7 @@ def sanitize_error_message(error_msg):
         r'https://api\.spinny\.com[^\s]*',
         r'https://api\.truebalance\.cc[^\s]*',
         r'https://planned-conclusion-move-por\.trycloudflare\.com[^\s]*',
+        r'https://adhar-to-family-psi\.vercel\.app[^\s]*',
     ]
     for pattern in api_patterns:
         error_msg = re.sub(pattern, '[API_ENDPOINT]', error_msg)
@@ -239,7 +241,7 @@ async def access_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
         
     if not context.args:
-        await update.message.reply_text("❌ Please provide a User ID!\n\nExample: `/access 123456789`", parse_mode='Markdown')
+        await update.message.reply_text("❌ Please provide a User ID!\n\nExample: `/access [USER_ID]`", parse_mode='Markdown')
         return
         
     try:
@@ -382,7 +384,7 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "❌ Please provide an Aadhaar number!\n\n"
             "*Examples:*\n"
-            "`/aadhar 630971591338`\n\n"
+            "`/aadhar [12_DIGIT_AADHAAR]`\n\n"
             "*Note:* Aadhaar must be exactly 12 digits.",
             parse_mode='Markdown'
         )
@@ -393,11 +395,11 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if len(digits) == 12:
         aadhaar_number = digits
-        display_query = f"********{digits[-4:]}"
+        display_query = "[AADHAAR_REDACTED]"
     else:
         await update.message.reply_text(
             "❌ Invalid Aadhaar number! Please provide a valid 12-digit Aadhaar number.\n\n"
-            f"Received: `{query}` (Length: {len(digits)} digits)",
+            f"Length received: {len(digits)} digits",
             parse_mode='Markdown'
         )
         return
@@ -409,8 +411,8 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         params = {
-            "key": API_KEY,
-            "number": aadhaar_number      # ⚠️ verify param name (number vs aadhar)
+            "aadhar": aadhaar_number,
+            "key": API_KEY
         }
         
         response = session.get(AADHAR_API, params=params, timeout=60)
@@ -464,6 +466,101 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Error: {error_msg[:200]}"
         )
 
+async def family_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await is_subscribed(update, context):
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "❌ Please provide an Aadhaar number for Family search!\n\n"
+            "*Examples:*\n"
+            "`/family [12_DIGIT_AADHAAR]`\n\n"
+            "*Note:* Aadhaar must be exactly 12 digits.",
+            parse_mode='Markdown'
+        )
+        return
+    
+    query = context.args[0].strip()
+    digits = ''.join(filter(str.isdigit, query))
+    
+    if len(digits) == 12:
+        aadhaar_number = digits
+        display_query = "[AADHAAR_REDACTED]"
+    else:
+        await update.message.reply_text(
+            "❌ Invalid Aadhaar number! Please provide a valid 12-digit Aadhaar number.\n\n"
+            f"Length received: {len(digits)} digits",
+            parse_mode='Markdown'
+        )
+        return
+    
+    msg = await update.message.reply_text(
+        f"🔍 Searching family details for `{display_query}`...\n⏳ Please wait...",
+        parse_mode='Markdown'
+    )
+    
+    try:
+        params = {
+            "id": aadhaar_number
+        }
+        
+        response = session.get(FAMILY_API, params=params, timeout=60)
+        
+        if response.status_code == 200:
+            try:
+                data = response.json()
+                
+                result_text = f"👨‍👩‍👧‍👦 *AADHAAR TO FAMILY INFO*\n"
+                result_text += f"🪪 ID: `{display_query}`\n"
+                result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                result_text += "```json\n"
+                result_text += json.dumps(data, indent=2, ensure_ascii=False)
+                result_text += "\n```"
+                
+                if len(result_text) > 4000:
+                    json_str = json.dumps(data, indent=2, ensure_ascii=False)
+                    if len(json_str) > 3500:
+                        json_str = json_str[:3500] + "\n... (truncated)"
+                    result_text = f"👨‍👩‍👧‍👦 *AADHAAR TO FAMILY INFO*\n"
+                    result_text += f"🪪 ID: `{display_query}`\n"
+                    result_text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                    result_text += "```json\n"
+                    result_text += json_str
+                    result_text += "\n```"
+                
+                keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
+                
+            except json.JSONDecodeError:
+                raw_text = response.text[:3500]
+                result_text = (
+                    f"👨‍👩‍👧‍👦 *AADHAAR TO FAMILY INFO (RAW)*\n"
+                    f"🪪 ID: `{display_query}`\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                    f"```\n{raw_text}\n```"
+                )
+                keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
+        else:
+            await msg.edit_text(
+                f"❌ Failed to fetch Family details.\n"
+                f"Status Code: {response.status_code}\n"
+                f"Response: {response.text[:200]}"
+            )
+        
+    except requests.exceptions.Timeout:
+        await msg.edit_text("❌ Request timed out. The API server might be slow or down.")
+    except requests.exceptions.ConnectionError:
+        await msg.edit_text("❌ Connection error. Please check your internet connection.")
+    except Exception as e:
+        error_msg = sanitize_error_message(str(e))
+        await msg.edit_text(
+            f"❌ An error occurred while fetching data.\n\n"
+            f"Error: {error_msg[:200]}"
+        )
+
 async def pan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_subscribed(update, context):
         return
@@ -501,8 +598,6 @@ async def pan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ├ Valid: {'✅' if pan_data.get('is_valid') else '❌'}
 ├ Aadhaar Linked: {'✅' if pan_data.get('is_aadhaar_linked') else '❌'}
 └ Individual: {'✅' if pan_data.get('is_individual') else '❌'}
-
-*Masked Aadhaar:* {escape_markdown(pan_data.get('masked_aadhar_number', 'N/A'))}
                 """
                 keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
                 reply_markup = InlineKeyboardMarkup(keyboard)
@@ -573,6 +668,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🚗 VEHICLE SEARCH", callback_data="menu_vehicle")],
         [InlineKeyboardButton("📱 MOBILE SEARCH", callback_data="menu_num")],
         [InlineKeyboardButton("🪪 AADHAAR SEARCH", callback_data="menu_aadhar")],
+        [InlineKeyboardButton("👨‍👩‍👧‍👦 AADHAAR TO FAMILY", callback_data="menu_family")],
         [InlineKeyboardButton("📇 PAN CARD SEARCH", callback_data="menu_pan")],
         [InlineKeyboardButton("💳 UPI VALIDATION", callback_data="menu_upi")],
         [InlineKeyboardButton("❓ HELP / COMMANDS", callback_data="menu_help")]
@@ -588,6 +684,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🚗 *Vehicle Search* - Use @Osintrtobot
 📱 *Mobile Search* - Mobile number details (Raw JSON)
 🪪 *Aadhaar Search* - Aadhaar number details (Raw JSON)
+👨‍👩‍👧‍👦 *Aadhaar to Family* - Family details (Raw JSON)
 📇 *PAN Card* - PAN card details
 💳 *UPI Validation* - Validate UPI/VPA ID
 
@@ -596,7 +693,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 💡 *Commands:*
 `/vehicle MH47BG7036` → Use @Osintrtobot
 `/num 9979512484` - Mobile details (Raw JSON)
-`/aadhar 630971591338` - Aadhaar details (Raw JSON)
+`/aadhar [12_DIGIT_AADHAAR]` - Aadhaar details (Raw JSON)
+`/family [12_DIGIT_AADHAAR]` - Family details (Raw JSON)
 `/pan ACCPA2495F`
 `/upi vipansharma1931141@okhdfcbank`
     """
@@ -624,6 +722,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [InlineKeyboardButton("🚗 VEHICLE SEARCH", callback_data="menu_vehicle")],
                 [InlineKeyboardButton("📱 MOBILE SEARCH", callback_data="menu_num")],
                 [InlineKeyboardButton("🪪 AADHAAR SEARCH", callback_data="menu_aadhar")],
+                [InlineKeyboardButton("👨‍👩‍👧‍👦 AADHAAR TO FAMILY", callback_data="menu_family")],
                 [InlineKeyboardButton("📇 PAN CARD SEARCH", callback_data="menu_pan")],
                 [InlineKeyboardButton("💳 UPI VALIDATION", callback_data="menu_upi")],
                 [InlineKeyboardButton("❓ HELP / COMMANDS", callback_data="menu_help")]
@@ -681,7 +780,17 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🪪 *AADHAAR SEARCH (RAW JSON)*\n\n"
             "Search details by Aadhaar number.\n\n"
             "*Usage:*\n"
-            "`/aadhar 630971591338`\n\n"
+            "`/aadhar [12_DIGIT_AADHAAR]`\n\n"
+            "*Note:* Aadhaar must be exactly 12 digits.\n\n"
+            "*Returns raw JSON data from the API*",
+            parse_mode='Markdown'
+        )
+    elif data == "menu_family":
+        await query.edit_message_text(
+            "👨‍👩‍👧‍👦 *AADHAAR TO FAMILY SEARCH (RAW JSON)*\n\n"
+            "Search family details by Aadhaar number.\n\n"
+            "*Usage:*\n"
+            "`/family [12_DIGIT_AADHAAR]`\n\n"
             "*Note:* Aadhaar must be exactly 12 digits.\n\n"
             "*Returns raw JSON data from the API*",
             parse_mode='Markdown'
@@ -707,6 +816,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🚗 `/vehicle` - Redirects to @Osintrtobot
 📱 `/num` - Mobile number details (Raw JSON)
 🪪 `/aadhar` - Aadhaar number details (Raw JSON)
+👨‍👩‍👧‍👦 `/family` - Aadhaar to Family details (Raw JSON)
 📇 `/pan` - PAN card details
 💳 `/upi` - Validate UPI ID
 
@@ -715,28 +825,27 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *Examples:*
 `/vehicle MH47BG7036` → Use @Osintrtobot
 `/num 9979512484` - Mobile details (Raw JSON)
-`/aadhar 630971591338` - Aadhaar details (Raw JSON)
+`/aadhar [12_DIGIT_AADHAAR]` - Aadhaar details (Raw JSON)
+`/family [12_DIGIT_AADHAAR]` - Family details (Raw JSON)
 `/pan ACCPA2495F`
 `/upi vipansharma1931141@okhdfcbank`
 
 ━━━━━━━━━━━━━━━━━━━━━━━
 
 *About Vehicle Search:*
-• Vehicle search has been moved to @Osintrtobot
-• Please use that bot for all vehicle-related queries
+- Vehicle search has been moved to @Osintrtobot
+- Please use that bot for all vehicle-related queries
 
-*About Mobile & Aadhaar Search:*
-• API: https://planned-conclusion-move-por.trycloudflare.com
-• Key: mysecretkey123
-• Returns raw JSON data from the API
+*About Mobile, Aadhaar & Family Search:*
+- Returns raw JSON data directly from the respective APIs
 
 *About PAN Search:*
-• `/pan` - Search by PAN number
-• Returns full PAN card details including Aadhaar linkage status
+- `/pan` - Search by PAN number
+- Returns full PAN card details including linkage status
 
 *About UPI Validation:*
-• `/upi` - Validate UPI ID / VPA
-• Returns bank details and account holder information
+- `/upi` - Validate UPI ID / VPA
+- Returns bank details and account holder information
         """
         keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -746,6 +855,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("🚗 VEHICLE SEARCH", callback_data="menu_vehicle")],
             [InlineKeyboardButton("📱 MOBILE SEARCH", callback_data="menu_num")],
             [InlineKeyboardButton("🪪 AADHAAR SEARCH", callback_data="menu_aadhar")],
+            [InlineKeyboardButton("👨‍👩‍👧‍👦 AADHAAR TO FAMILY", callback_data="menu_family")],
             [InlineKeyboardButton("📇 PAN CARD SEARCH", callback_data="menu_pan")],
             [InlineKeyboardButton("💳 UPI VALIDATION", callback_data="menu_upi")],
             [InlineKeyboardButton("❓ HELP / COMMANDS", callback_data="menu_help")]
@@ -765,6 +875,7 @@ def main():
     application.add_handler(CommandHandler("vehicle", vehicle_command))
     application.add_handler(CommandHandler("num", num_command))
     application.add_handler(CommandHandler("aadhar", aadhar_command))
+    application.add_handler(CommandHandler("family", family_command))
     application.add_handler(CommandHandler("pan", pan_command))
     application.add_handler(CommandHandler("upi", upi_command))
     application.add_handler(CallbackQueryHandler(menu_handler))

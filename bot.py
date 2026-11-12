@@ -1,4 +1,3 @@
-```python
 import requests
 import json
 import logging
@@ -839,13 +838,37 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown'
         )
     elif data == "menu_aadhar":
-        await update.message.reply_text("This is a placeholder for menu_aadhar")
+        await query.edit_message_text(
+            f"🪪 *AADHAAR SEARCH*\n\n"
+            f"Search details by Aadhaar number.\n\n"
+            f"*Usage:*\n"
+            f"`/aadhar 886553666165`\n\n"
+            f"*Note:* Aadhaar must be exactly 12 digits.\n\n"
+            f"*Returns name, father name, mobile, alternate mobile, email, circle & address*\n\n"
+            f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`",
+            parse_mode='Markdown'
+        )
     elif data == "menu_family":
-        await update.message.reply_text("This is a placeholder for menu_family")
+        await query.edit_message_text(
+            f"👨‍👩‍👧‍👦 *AADHAAR TO FAMILY SEARCH (RAW JSON)*\n\n"
+            f"Search family details by Aadhaar number.\n\n"
+            f"*Usage:*\n"
+            f"`/family [12_DIGIT_AADHAAR]`\n\n"
+            f"*Note:* Aadhaar must be exactly 12 digits.\n\n"
+            f"*Returns raw JSON data from the API*\n\n"
+            f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`",
+            parse_mode='Markdown'
+        )
     elif data == "menu_pan":
-        await update.message.reply_text("This is a placeholder for menu_pan")
+        await query.edit_message_text(
+            f"📇 *PAN CARD SEARCH*\n\nPlease send the PAN number.\nExample: `ACCPA2495F`\n\nType: `/pan ACCPA2495F`\n\n👨‍💻 *Developer:* `{DEVELOPER_NAME}`",
+            parse_mode='Markdown'
+        )
     elif data == "menu_upi":
-        await update.message.reply_text("This is a placeholder for menu_upi")
+        await query.edit_message_text(
+            f"💳 *UPI VALIDATION*\n\nPlease send the UPI ID / VPA.\nExample: `vipansharma1931141@okhdfcbank`\n\nType: `/upi vipansharma1931141@okhdfcbank`\n\n👨‍💻 *Developer:* `{DEVELOPER_NAME}`",
+            parse_mode='Markdown'
+        )
     elif data == "menu_help":
         help_text = f"""
 ❓ *HELP & COMMANDS*
@@ -936,4 +959,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-```

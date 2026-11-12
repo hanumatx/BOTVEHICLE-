@@ -1,3 +1,4 @@
+```python
 import requests
 import json
 import logging
@@ -54,13 +55,13 @@ def save_auth_users(users):
 AUTHORIZED_USERS = load_auth_users()
 # -------------------------
 
-# API Endpoints
+# --- UPDATED API ENDPOINTS (GBS Systems) ---
 VEHICLE_API = "https://chuchirandiki.vercel.app/api/vehicle"
-NEW_API_BASE = "https://planned-conclusion-move-por.trycloudflare.com"
-NUMBER_API = f"{NEW_API_BASE}/search/number"
-AADHAR_API = f"{NEW_API_BASE}/search/aadhar"
+NEW_API_BASE = "https://admin.gbssystems.com/public/gateway/apiv1/api.php"
+NUMBER_API = NEW_API_BASE
+AADHAR_API = NEW_API_BASE
 FAMILY_API = "https://adhar-to-family-psi.vercel.app/family"
-API_KEY = "mysecretkey123"
+API_KEY = "9NXZC"
 SPINNY_URL = "https://api.spinny.com/v3/api/vehicle/full-pan-details/"
 UPI_API = "https://api.truebalance.cc/v2/v2/payment/validateVPA"
 SPINNY_AUTH_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgzNDM5MDY2LCJqdGkiOiIxOTUyOTJkNDdiNjE0M2M2YjExNGUyOWQwMjc1OTA1NSIsInVzZXJfaWQiOjI3ODQxMzg3fQ.uAQg937MTs_4Dz7rgGqX28xVX7liEx6jIm0-1SL2SNc"
@@ -173,7 +174,7 @@ def sanitize_error_message(error_msg):
         r'https://chuchirandiki\.vercel\.app[^\s]*',
         r'https://api\.spinny\.com[^\s]*',
         r'https://api\.truebalance\.cc[^\s]*',
-        r'https://planned-conclusion-move-por\.trycloudflare\.com[^\s]*',
+        r'https://admin\.gbssystems\.com[^\s]*',
         r'https://adhar-to-family-psi\.vercel\.app[^\s]*',
     ]
     for pattern in api_patterns:
@@ -308,8 +309,8 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "❌ Please provide a mobile number!\n\n"
             "*Examples:*\n"
-            "`/num 9979512484`\n"
-            "`/num +919979512484`\n\n"
+            "`/num 9093614290`\n"
+            "`/num +919093614290`\n\n"
             "*Note:* Always use +91 prefix for best results.",
             parse_mode='Markdown'
         )
@@ -335,36 +336,56 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     try:
-        if query.startswith('+'):
-            number = query[3:] if query.startswith('+91') else query[1:]
-        else:
-            number = digits[-10:]
-        
         params = {
             "key": API_KEY,
-            "number": number
+            "cmd": "number",
+            "query": number
         }
         
         response = session.get(NUMBER_API, params=params, timeout=60)
         
         if response.status_code == 200:
             try:
-                data = inject_developer(response.json())
-                json_str = json.dumps(data, indent=2, ensure_ascii=False)
-                if len(json_str) > 3500:
-                    json_str = json_str[:3500] + "\n... (truncated)"
+                data = response.json()
                 
-                result_text = (
-                    f"🔥 *NUMBER INFO*\n"
-                    f"📱 Number: `{display_query}`\n"
-                    f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                    f"```json\n{json_str}\n```\n\n"
-                    f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
-                )
-                
-                keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
+                # GBS Systems number API response handling
+                if data.get("status", "").upper() == "SUCCESS" and data.get("result"):
+                    results = data["result"]
+                    total = data.get("total_records", len(results))
+                    
+                    result_text = (
+                        f"📱 *NUMBER INFO*\n"
+                        f"🔢 Number: `{display_query}`\n"
+                        f"📊 Total Records: `{total}`\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                    )
+                    
+                    for idx, record in enumerate(results[:5], 1):
+                        result_text += f"*Record {idx}:*\n"
+                        result_text += f"├ Name: `{escape_markdown(record.get('name', 'N/A'))}`\n"
+                        result_text += f"├ Father: `{escape_markdown(record.get('father_name', 'N/A'))}`\n"
+                        result_text += f"├ Aadhaar: `{escape_markdown(record.get('aadhar', 'N/A'))}`\n"
+                        result_text += f"├ Mobile: `{escape_markdown(record.get('mobile', 'N/A'))}`\n"
+                        result_text += f"├ Alt Mobile: `{escape_markdown(record.get('alternate_mobile', 'N/A') or 'N/A')}`\n"
+                        result_text += f"├ Email: `{escape_markdown(record.get('email', 'N/A') or 'N/A')}`\n"
+                        result_text += f"├ Circle: `{escape_markdown(record.get('circle', 'N/A'))}`\n"
+                        result_text += f"└ Address: `{escape_markdown(record.get('address', 'N/A'))}`\n\n"
+                    
+                    if len(results) > 5:
+                        result_text += f"... and {len(results) - 5} more records.\n\n"
+                    
+                    result_text += f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
+                    
+                    keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
+                else:
+                    await msg.edit_text(
+                        f"❌ No records found for `{display_query}`.\n\n"
+                        f"Status: {data.get('status', 'UNKNOWN')}\n\n"
+                        f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`",
+                        parse_mode='Markdown'
+                    )
                 
             except json.JSONDecodeError:
                 await msg.edit_text(
@@ -400,7 +421,7 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "❌ Please provide an Aadhaar number!\n\n"
             "*Examples:*\n"
-            "`/aadhar [12_DIGIT_AADHAAR]`\n\n"
+            "`/aadhar 886553666165`\n\n"
             "*Note:* Aadhaar must be exactly 12 digits.",
             parse_mode='Markdown'
         )
@@ -427,30 +448,55 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         params = {
-            "aadhar": aadhaar_number,
-            "key": API_KEY
+            "key": API_KEY,
+            "cmd": "aadhar",
+            "query": aadhaar_number
         }
         
         response = session.get(AADHAR_API, params=params, timeout=60)
         
         if response.status_code == 200:
             try:
-                data = inject_developer(response.json())
-                json_str = json.dumps(data, indent=2, ensure_ascii=False)
-                if len(json_str) > 3500:
-                    json_str = json_str[:3500] + "\n... (truncated)"
+                data = response.json()
                 
-                result_text = (
-                    f"🔥 *AADHAAR INFO*\n"
-                    f"🪪 Aadhaar: `{display_query}`\n"
-                    f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                    f"```json\n{json_str}\n```\n\n"
-                    f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
-                )
+                # GBS Systems aadhar API response handling (uppercase keys)
+                status = data.get("STATUS", data.get("status", ""))
+                results = data.get("RESULT", data.get("result", []))
+                total = data.get("COUNT", data.get("total_records", len(results)))
                 
-                keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
+                if str(status).upper() == "SUCCESS" and results:
+                    result_text = (
+                        f"🪪 *AADHAAR INFO*\n"
+                        f"🔢 Aadhaar: `{display_query}`\n"
+                        f"📊 Total Records: `{total}`\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                    )
+                    
+                    for idx, record in enumerate(results[:5], 1):
+                        result_text += f"*Record {idx}:*\n"
+                        result_text += f"├ Name: `{escape_markdown(record.get('NAME', 'N/A'))}`\n"
+                        result_text += f"├ Father: `{escape_markdown(record.get('FNAME', 'N/A'))}`\n"
+                        result_text += f"├ Mobile: `{escape_markdown(record.get('NUMBER', 'N/A'))}`\n"
+                        result_text += f"├ Alt Mobile: `{escape_markdown(record.get('ALT', 'N/A') or 'N/A')}`\n"
+                        result_text += f"├ Email: `{escape_markdown(record.get('EMAIL', 'N/A') or 'N/A')}`\n"
+                        result_text += f"├ Circle: `{escape_markdown(record.get('CIRCLE', 'N/A') or 'N/A')}`\n"
+                        result_text += f"└ Address: `{escape_markdown(record.get('ADDRESS', 'N/A'))}`\n\n"
+                    
+                    if len(results) > 5:
+                        result_text += f"... and {len(results) - 5} more records.\n\n"
+                    
+                    result_text += f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
+                    
+                    keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    await msg.edit_text(result_text, parse_mode='Markdown', reply_markup=reply_markup)
+                else:
+                    await msg.edit_text(
+                        f"❌ No records found for `{display_query}`.\n\n"
+                        f"Status: {status or 'UNKNOWN'}\n\n"
+                        f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`",
+                        parse_mode='Markdown'
+                    )
                 
             except json.JSONDecodeError:
                 await msg.edit_text(
@@ -694,8 +740,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *Select an option below:*
 
 🚗 *Vehicle Search* - Use @Osintrtobot
-📱 *Mobile Search* - Mobile number details (Raw JSON)
-🪪 *Aadhaar Search* - Aadhaar number details (Raw JSON)
+📱 *Mobile Search* - Mobile number details
+🪪 *Aadhaar Search* - Aadhaar number details
 👨‍👩‍👧‍👦 *Aadhaar to Family* - Family details (Raw JSON)
 📇 *PAN Card* - PAN card details
 💳 *UPI Validation* - Validate UPI/VPA ID
@@ -704,8 +750,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 💡 *Commands:*
 `/vehicle MH47BG7036` → Use @Osintrtobot
-`/num 9979512484` - Mobile details (Raw JSON)
-`/aadhar [12_DIGIT_AADHAAR]` - Aadhaar details (Raw JSON)
+`/num 9093614290` - Mobile details
+`/aadhar 886553666165` - Aadhaar details
 `/family [12_DIGIT_AADHAAR]` - Family details (Raw JSON)
 `/pan ACCPA2495F`
 `/upi vipansharma1931141@okhdfcbank`
@@ -783,47 +829,23 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     elif data == "menu_num":
         await query.edit_message_text(
-            f"📱 *MOBILE SEARCH (RAW JSON)*\n\n"
+            f"📱 *MOBILE SEARCH*\n\n"
             f"Search details for any mobile number.\n\n"
             f"*Usage:*\n"
-            f"`/num 9979512484`\n"
-            f"`/num +919979512484`\n\n"
-            f"*Returns raw JSON data from the API*\n\n"
+            f"`/num 9093614290`\n"
+            f"`/num +919093614290`\n\n"
+            f"*Returns name, father name, aadhaar, alternate mobile, email, circle & address*\n\n"
             f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`",
             parse_mode='Markdown'
         )
     elif data == "menu_aadhar":
-        await query.edit_message_text(
-            f"🪪 *AADHAAR SEARCH (RAW JSON)*\n\n"
-            f"Search details by Aadhaar number.\n\n"
-            f"*Usage:*\n"
-            f"`/aadhar [12_DIGIT_AADHAAR]`\n\n"
-            f"*Note:* Aadhaar must be exactly 12 digits.\n\n"
-            f"*Returns raw JSON data from the API*\n\n"
-            f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`",
-            parse_mode='Markdown'
-        )
+        await update.message.reply_text("This is a placeholder for menu_aadhar")
     elif data == "menu_family":
-        await query.edit_message_text(
-            f"👨‍👩‍👧‍👦 *AADHAAR TO FAMILY SEARCH (RAW JSON)*\n\n"
-            f"Search family details by Aadhaar number.\n\n"
-            f"*Usage:*\n"
-            f"`/family [12_DIGIT_AADHAAR]`\n\n"
-            f"*Note:* Aadhaar must be exactly 12 digits.\n\n"
-            f"*Returns raw JSON data from the API*\n\n"
-            f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`",
-            parse_mode='Markdown'
-        )
+        await update.message.reply_text("This is a placeholder for menu_family")
     elif data == "menu_pan":
-        await query.edit_message_text(
-            f"📇 *PAN CARD SEARCH*\n\nPlease send the PAN number.\nExample: `ACCPA2495F`\n\nType: `/pan ACCPA2495F`\n\n👨‍💻 *Developer:* `{DEVELOPER_NAME}`",
-            parse_mode='Markdown'
-        )
+        await update.message.reply_text("This is a placeholder for menu_pan")
     elif data == "menu_upi":
-        await query.edit_message_text(
-            f"💳 *UPI VALIDATION*\n\nPlease send the UPI ID / VPA.\nExample: `vipansharma1931141@okhdfcbank`\n\nType: `/upi vipansharma1931141@okhdfcbank`\n\n👨‍💻 *Developer:* `{DEVELOPER_NAME}`",
-            parse_mode='Markdown'
-        )
+        await update.message.reply_text("This is a placeholder for menu_upi")
     elif data == "menu_help":
         help_text = f"""
 ❓ *HELP & COMMANDS*
@@ -833,8 +855,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *Available Commands:*
 
 🚗 `/vehicle` - Redirects to @Osintrtobot
-📱 `/num` - Mobile number details (Raw JSON)
-🪪 `/aadhar` - Aadhaar number details (Raw JSON)
+📱 `/num` - Mobile number details
+🪪 `/aadhar` - Aadhaar number details
 👨‍👩‍👧‍👦 `/family` - Aadhaar to Family details (Raw JSON)
 📇 `/pan` - PAN card details
 💳 `/upi` - Validate UPI ID
@@ -843,8 +865,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 *Examples:*
 `/vehicle MH47BG7036` → Use @Osintrtobot
-`/num 9979512484` - Mobile details (Raw JSON)
-`/aadhar [12_DIGIT_AADHAAR]` - Aadhaar details (Raw JSON)
+`/num 9093614290` - Mobile details
+`/aadhar 886553666165` - Aadhaar details
 `/family [12_DIGIT_AADHAAR]` - Family details (Raw JSON)
 `/pan ACCPA2495F`
 `/upi vipansharma1931141@okhdfcbank`
@@ -855,8 +877,9 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 - Vehicle search has been moved to @Osintrtobot
 - Please use that bot for all vehicle-related queries
 
-*About Mobile, Aadhaar & Family Search:*
-- Returns raw JSON data directly from the respective APIs
+*About Mobile & Aadhaar Search:*
+- Returns formatted data from GBS Systems API
+- Includes name, father name, mobile, alternate mobile, email, circle, address
 
 *About PAN Search:*
 - `/pan` - Search by PAN number
@@ -913,3 +936,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+```

@@ -10,6 +10,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+import requests
 
 try:
     import pytz
@@ -27,21 +28,26 @@ logger = logging.getLogger(__name__)
 
 # Bot token & Developer Info
 BOT_TOKEN = "8920266695:AAFJ3qSyI5TcSXaOPaNqRyljt8od7UrBdVs"
-DEVELOPER_NAME = "CHUT KI RANI "
+DEVELOPER_NAME = "MRXIXZ"
+DEVELOPER_USERNAME = "@MRXIXZ"
 
 # --- FORCE SUBSCRIBE & ACCESS CONFIGURATION ---
 CHANNELS = [
     {"id": "-1003307570375", "link": "https://t.me/vehicleinformationz", "name": "Vehicle Information"},
     {"id": "-1002994389095", "link": "https://t.me/+WTV1YU_yIvc2NDZh", "name": "Main Channel"}
 ]
-ADMIN_ID = 8273728944
+ADMIN_ID = 8273728944  # @MRXIXZ
 
 # --- DAILY LIMIT CONFIG ---
-DAILY_LIMIT = 100
+DAILY_LIMIT = 5
 USAGE_FILE = "daily_usage.json"
 
 # --- VIP USERS STORAGE ---
 AUTH_FILE = "authorized_users.json"
+
+# --- PREMIUM PRICING ---
+PREMIUM_PRICE = 50
+PREMIUM_SEARCHES = 100
 
 def load_auth_users():
     try:
@@ -109,9 +115,11 @@ async def enforce_limit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> b
     if not allowed:
         text = (
             f"🚫 *Daily Limit Reached!*\n\n"
-            f"You have used your *{DAILY_LIMIT} searches* for today.\n\n"
+            f"You have used your *{DAILY_LIMIT} free searches* for today.\n\n"
             f"⏰ Limit will reset at *midnight IST*.\n\n"
-            f"💡 *Tip:* Contact admin for VIP access (unlimited searches).\n\n"
+            f"💎 *Want more searches?*\n"
+            f"├ Premium: *₹{PREMIUM_PRICE}* = *{PREMIUM_SEARCHES} searches*\n"
+            f"└ Contact: {DEVELOPER_USERNAME}\n\n"
             f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
         )
         await context.bot.send_message(
@@ -121,8 +129,9 @@ async def enforce_limit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> b
     return True
 
 # --- API ENDPOINTS ---
+NUMBER_API = "https://dark-info.site/test/api.php"
+NUMBER_API_KEY = "Dark-info?008"
 NEW_API_BASE = "https://admin.gbssystems.com/public/gateway/apiv1/api.php"
-NUMBER_API = NEW_API_BASE
 AADHAR_API = NEW_API_BASE
 FAMILY_API = "https://adhar-to-family-psi.vercel.app/family"
 API_KEY = "9NXZC"
@@ -202,7 +211,6 @@ def create_session():
     session.mount("https://", adapter)
     return session
 
-import requests
 session = create_session()
 
 def escape_markdown(text):
@@ -219,6 +227,7 @@ def escape_markdown(text):
 
 def sanitize_error_message(error_msg):
     api_patterns = [
+        r'https://dark-info\.site[^\s]*',
         r'https://api\.spinny\.com[^\s]*',
         r'https://api\.truebalance\.cc[^\s]*',
         r'https://admin\.gbssystems\.com[^\s]*',
@@ -231,7 +240,7 @@ def sanitize_error_message(error_msg):
     error_msg = re.sub(r'Authorization: Bearer [^\s]+', 'Authorization: Bearer [HIDDEN]', error_msg)
     return error_msg
 
-# ═══════════════════════ SAFE SEND HELPERS ═══════════════════════
+# ═══════════════════════════ SAFE SEND HELPERS ═══════════════════════════
 async def safe_reply(update, context, text, **kwargs):
     try:
         return await update.message.reply_text(text, **kwargs)
@@ -320,7 +329,7 @@ async def is_subscribed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> b
         pass
     return False
 
-# ═══════════════════════ COMMANDS ═══════════════════════
+# ═══════════════════════════ COMMANDS ═══════════════════════════
 async def access_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         await safe_reply(update, context, "❌ You are not authorized.")
@@ -344,8 +353,8 @@ async def usage_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if remaining == -1:
         text = (
-            f"⭐ *Unlimited Access*\n\n"
-            f"You have VIP/Admin access.\n\n"
+            f"💎 *Unlimited Access*\n\n"
+            f"You have VIP/Premium access.\n\n"
             f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
         )
     else:
@@ -355,6 +364,8 @@ async def usage_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"├ Used: *{used}* / {DAILY_LIMIT}\n"
             f"├ Remaining: *{remaining}*\n"
             f"└ Resets: *Midnight IST*\n\n"
+            f"💎 *Want more?* ₹{PREMIUM_PRICE} = {PREMIUM_SEARCHES} searches\n"
+            f"📞 Contact: {DEVELOPER_USERNAME}\n\n"
             f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
         )
     await context.bot.send_message(
@@ -413,6 +424,8 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(digits) < 10:
         await safe_reply(update, context, f"❌ Invalid mobile number! Received: `{query}`", parse_mode='Markdown')
         return
+
+    # Always +91 auto-add
     number = digits[-10:]
     display_query = f"+91{number}"
 
@@ -421,46 +434,57 @@ async def num_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown')
 
     try:
-        params = {"key": API_KEY, "cmd": "number", "query": number}
-        response = session.get(NUMBER_API, params=params, timeout=60)
+        url = f"{NUMBER_API}?key={NUMBER_API_KEY}&num={display_query}"
+        response = session.get(url, timeout=60)
 
         if response.status_code == 200:
             try:
                 data = response.json()
-                if str(data.get("status", "")).upper() == "SUCCESS" and data.get("result"):
-                    results = data["result"]
-                    total = data.get("total_records", len(results))
-                    text = (
-                        f"📱 *NUMBER INFO*\n🔢 Number: `{display_query}`\n"
-                        f"📊 Total Records: `{total}`\n━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                    )
-                    for idx, record in enumerate(results[:5], 1):
-                        text += (
-                            f"*Record {idx}:*\n"
-                            f"├ Name: `{escape_markdown(record.get('name', 'N/A'))}`\n"
-                            f"├ Father: `{escape_markdown(record.get('father_name', 'N/A'))}`\n"
-                            f"├ Aadhaar: `{escape_markdown(record.get('aadhar', 'N/A'))}`\n"
-                            f"├ Mobile: `{escape_markdown(record.get('mobile', 'N/A'))}`\n"
-                            f"├ Alt Mobile: `{escape_markdown(record.get('alternate_mobile', 'N/A') or 'N/A')}`\n"
-                            f"├ Email: `{escape_markdown(record.get('email', 'N/A') or 'N/A')}`\n"
-                            f"├ Circle: `{escape_markdown(record.get('circle', 'N/A'))}`\n"
-                            f"└ Address: `{escape_markdown(record.get('address', 'N/A'))}`\n\n"
-                        )
-                    if len(results) > 5:
-                        text += f"... and {len(results) - 5} more records.\n\n"
-                    text += f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
-
-                    keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
-                    reply_markup = InlineKeyboardMarkup(keyboard)
-                    if msg:
-                        await safe_edit(msg, text, parse_mode='Markdown', reply_markup=reply_markup)
-                else:
-                    text = f"❌ No records found for `{display_query}`.\n\nStatus: {data.get('status', 'UNKNOWN')}\n\n👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
-                    if msg:
-                        await safe_edit(msg, text, parse_mode='Markdown')
             except json.JSONDecodeError:
                 if msg:
-                    await safe_edit(msg, f"❌ Failed to parse API response.\n\n```\n{response.text[:500]}\n```", parse_mode='Markdown')
+                    await safe_edit(msg, f"❌ Failed to parse API response.\n\n```\n{response.text[:1500]}\n```", parse_mode='Markdown')
+                return
+
+            # Check success
+            status_val = str(data.get("Status", data.get("status", ""))).lower()
+            if status_val == "success":
+                # 🔥 RAW JSON — no UI
+                raw_json = json.dumps(data, indent=2, ensure_ascii=False)
+                text = f"📱 *NUMBER INFO — RAW DATA*\n🔢 Number: `{display_query}`\n━━━━━━━━━━━━━━━━━━━━━━━\n\n```json\n{raw_json}\n```"
+            else:
+                # Even on failure, send raw response
+                raw_json = json.dumps(data, indent=2, ensure_ascii=False)
+                text = f"📱 *NUMBER INFO — RAW DATA*\n🔢 Number: `{display_query}`\n━━━━━━━━━━━━━━━━━━━━━━━\n\n```json\n{raw_json}\n```"
+
+            # Telegram message limit ~4096 chars — split if needed
+            if len(text) <= 4000:
+                if msg:
+                    await safe_edit(msg, text, parse_mode='Markdown')
+            else:
+                # Send as multiple messages
+                if msg:
+                    try:
+                        await msg.delete()
+                    except Exception:
+                        pass
+                chunk_size = 3500
+                chunks = [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
+                for chunk in chunks:
+                    try:
+                        await context.bot.send_message(
+                            chat_id=update.effective_chat.id,
+                            text=f"```json\n{chunk}\n```",
+                            parse_mode='Markdown'
+                        )
+                    except Exception:
+                        # fallback without markdown
+                        try:
+                            await context.bot.send_message(
+                                chat_id=update.effective_chat.id,
+                                text=chunk
+                            )
+                        except Exception:
+                            pass
         else:
             if msg:
                 await safe_edit(msg, f"❌ Failed to fetch details. Status: {response.status_code}", parse_mode='Markdown')
@@ -503,41 +527,39 @@ async def aadhar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if response.status_code == 200:
             try:
                 data = response.json()
-                status = data.get("STATUS", data.get("status", ""))
-                results = data.get("RESULT", data.get("result", []))
-                total = data.get("COUNT", data.get("total_records", len(results)))
+                # Raw JSON send
+                raw_json = json.dumps(data, indent=2, ensure_ascii=False)
+                text = f"🪪 *AADHAAR INFO — RAW DATA*\n🔢 Aadhaar: `{display_query}`\n━━━━━━━━━━━━━━━━━━━━━━━\n\n```json\n{raw_json}\n```"
 
-                if str(status).upper() == "SUCCESS" and results:
-                    text = (
-                        f"🪪 *AADHAAR INFO*\n🔢 Aadhaar: `{display_query}`\n"
-                        f"📊 Total Records: `{total}`\n━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                    )
-                    for idx, record in enumerate(results[:5], 1):
-                        text += (
-                            f"*Record {idx}:*\n"
-                            f"├ Name: `{escape_markdown(record.get('NAME', 'N/A'))}`\n"
-                            f"├ Father: `{escape_markdown(record.get('FNAME', 'N/A'))}`\n"
-                            f"├ Mobile: `{escape_markdown(record.get('NUMBER', 'N/A'))}`\n"
-                            f"├ Alt Mobile: `{escape_markdown(record.get('ALT', 'N/A') or 'N/A')}`\n"
-                            f"├ Email: `{escape_markdown(record.get('EMAIL', 'N/A') or 'N/A')}`\n"
-                            f"├ Circle: `{escape_markdown(record.get('CIRCLE', 'N/A') or 'N/A')}`\n"
-                            f"└ Address: `{escape_markdown(record.get('ADDRESS', 'N/A'))}`\n\n"
-                        )
-                    if len(results) > 5:
-                        text += f"... and {len(results) - 5} more records.\n\n"
-                    text += f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
-
-                    keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
-                    reply_markup = InlineKeyboardMarkup(keyboard)
-                    if msg:
-                        await safe_edit(msg, text, parse_mode='Markdown', reply_markup=reply_markup)
-                else:
-                    text = f"❌ No records found.\n\nStatus: {status or 'UNKNOWN'}"
+                if len(text) <= 4000:
                     if msg:
                         await safe_edit(msg, text, parse_mode='Markdown')
+                else:
+                    if msg:
+                        try:
+                            await msg.delete()
+                        except Exception:
+                            pass
+                    chunk_size = 3500
+                    chunks = [raw_json[i:i+chunk_size] for i in range(0, len(raw_json), chunk_size)]
+                    for chunk in chunks:
+                        try:
+                            await context.bot.send_message(
+                                chat_id=update.effective_chat.id,
+                                text=f"```json\n{chunk}\n```",
+                                parse_mode='Markdown'
+                            )
+                        except Exception:
+                            try:
+                                await context.bot.send_message(
+                                    chat_id=update.effective_chat.id,
+                                    text=chunk
+                                )
+                            except Exception:
+                                pass
             except json.JSONDecodeError:
                 if msg:
-                    await safe_edit(msg, f"❌ Parse error.\n```\n{response.text[:500]}\n```", parse_mode='Markdown')
+                    await safe_edit(msg, f"❌ Parse error.\n```\n{response.text[:1500]}\n```", parse_mode='Markdown')
         else:
             if msg:
                 await safe_edit(msg, f"❌ Failed. Status: {response.status_code}", parse_mode='Markdown')
@@ -572,19 +594,36 @@ async def family_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         response = session.get(FAMILY_API, params={"id": digits}, timeout=60)
         if response.status_code == 200:
             try:
-                data = inject_developer(response.json())
-                json_str = json.dumps(data, indent=2, ensure_ascii=False)
-                if len(json_str) > 3500:
-                    json_str = json_str[:3500] + "\n... (truncated)"
-                text = (
-                    f"👨‍👩‍👧‍👦 *AADHAAR TO FAMILY INFO*\n🪪 ID: `[REDACTED]`\n"
-                    f"━━━━━━━━━━━━━━━━━━━━━━━\n\n```json\n{json_str}\n```\n\n"
-                    f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
-                )
-                keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                if msg:
-                    await safe_edit(msg, text, parse_mode='Markdown', reply_markup=reply_markup)
+                data = response.json()
+                raw_json = json.dumps(data, indent=2, ensure_ascii=False)
+                text = f"👨‍👩‍👧‍👦 *AADHAAR TO FAMILY — RAW DATA*\n🪪 ID: `[REDACTED]`\n━━━━━━━━━━━━━━━━━━━━━━━\n\n```json\n{raw_json}\n```"
+
+                if len(text) <= 4000:
+                    if msg:
+                        await safe_edit(msg, text, parse_mode='Markdown')
+                else:
+                    if msg:
+                        try:
+                            await msg.delete()
+                        except Exception:
+                            pass
+                    chunk_size = 3500
+                    chunks = [raw_json[i:i+chunk_size] for i in range(0, len(raw_json), chunk_size)]
+                    for chunk in chunks:
+                        try:
+                            await context.bot.send_message(
+                                chat_id=update.effective_chat.id,
+                                text=f"```json\n{chunk}\n```",
+                                parse_mode='Markdown'
+                            )
+                        except Exception:
+                            try:
+                                await context.bot.send_message(
+                                    chat_id=update.effective_chat.id,
+                                    text=chunk
+                                )
+                            except Exception:
+                                pass
             except json.JSONDecodeError:
                 if msg:
                     await safe_edit(msg, f"```\n{response.text[:3500]}\n```", parse_mode='Markdown')
@@ -612,32 +651,35 @@ async def pan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                cookies={"platform": "app_android"}, json={}, timeout=60)
         if response.status_code == 200:
             data = response.json()
-            if data.get('is_success') and data.get('ok'):
-                pan_data = data.get('data', {})
-                pan_data = inject_developer(pan_data)
-                text = (
-                    f"📇 *PAN CARD DETAILS*\n━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                    f"*PAN:* `{escape_markdown(pan_data.get('pan_number', 'N/A'))}`\n"
-                    f"*Name:* {escape_markdown(pan_data.get('name', 'N/A'))}\n\n"
-                    f"*Personal:*\n"
-                    f"├ Gender: {escape_markdown(pan_data.get('gender', 'N/A'))}\n"
-                    f"├ DOB: {escape_markdown(pan_data.get('dob', 'N/A'))}\n"
-                    f"├ Category: {escape_markdown(pan_data.get('category', 'N/A'))}\n"
-                    f"└ Type: {escape_markdown(pan_data.get('type_of_holder', 'N/A'))}\n\n"
-                    f"*Status:*\n"
-                    f"├ PAN Status: {escape_markdown(pan_data.get('pan_status', 'N/A'))}\n"
-                    f"├ Valid: {'✅' if pan_data.get('is_valid') else '❌'}\n"
-                    f"├ Aadhaar Linked: {'✅' if pan_data.get('is_aadhaar_linked') else '❌'}\n"
-                    f"└ Individual: {'✅' if pan_data.get('is_individual') else '❌'}\n\n"
-                    f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
-                )
-                keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
-                reply_markup = InlineKeyboardMarkup(keyboard)
+            raw_json = json.dumps(data, indent=2, ensure_ascii=False)
+            text = f"📇 *PAN CARD — RAW DATA*\n🔢 PAN: `{pan_number}`\n━━━━━━━━━━━━━━━━━━━━━━━\n\n```json\n{raw_json}\n```"
+
+            if len(text) <= 4000:
                 if msg:
-                    await safe_edit(msg, text, parse_mode='Markdown', reply_markup=reply_markup)
+                    await safe_edit(msg, text, parse_mode='Markdown')
             else:
                 if msg:
-                    await safe_edit(msg, f"❌ No data found for PAN `{pan_number}`")
+                    try:
+                        await msg.delete()
+                    except Exception:
+                        pass
+                chunk_size = 3500
+                chunks = [raw_json[i:i+chunk_size] for i in range(0, len(raw_json), chunk_size)]
+                for chunk in chunks:
+                    try:
+                        await context.bot.send_message(
+                            chat_id=update.effective_chat.id,
+                            text=f"```json\n{chunk}\n```",
+                            parse_mode='Markdown'
+                        )
+                    except Exception:
+                        try:
+                            await context.bot.send_message(
+                                chat_id=update.effective_chat.id,
+                                text=chunk
+                            )
+                        except Exception:
+                            pass
         else:
             if msg:
                 await safe_edit(msg, "❌ Failed to fetch PAN details.")
@@ -701,28 +743,29 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     keyboard = [
-        [InlineKeyboardButton("🚗 VEHICLE SEARCH", callback_data="menu_vehicle")],
         [InlineKeyboardButton("📱 MOBILE SEARCH", callback_data="menu_num")],
         [InlineKeyboardButton("🪪 AADHAAR SEARCH", callback_data="menu_aadhar")],
         [InlineKeyboardButton("👨‍👩‍👧‍👦 AADHAAR TO FAMILY", callback_data="menu_family")],
         [InlineKeyboardButton("📇 PAN CARD SEARCH", callback_data="menu_pan")],
         [InlineKeyboardButton("💳 UPI VALIDATION", callback_data="menu_upi")],
         [InlineKeyboardButton("📊 MY USAGE", callback_data="menu_usage")],
+        [InlineKeyboardButton("💎 BUY PREMIUM", callback_data="menu_premium")],
         [InlineKeyboardButton("❓ HELP / COMMANDS", callback_data="menu_help")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     welcome_text = (
         f"🚀 *WELCOME TO SEARCH BOT* 🚀\n\n━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"*Select an option below:*\n\n"
-        f"🚗 *Vehicle Search* - Use @Osintrtobot\n"
         f"📱 *Mobile Search* - Mobile number details\n"
         f"🪪 *Aadhaar Search* - Aadhaar number details\n"
         f"👨‍👩‍👧‍👦 *Aadhaar to Family* - Family details (Raw JSON)\n"
         f"📇 *PAN Card* - PAN card details\n"
         f"💳 *UPI Validation* - Validate UPI/VPA ID\n\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"💎 *PREMIUM:* ₹{PREMIUM_PRICE} = {PREMIUM_SEARCHES} searches\n"
+        f"📞 Contact: {DEVELOPER_USERNAME}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"💡 *Commands:*\n"
-        f"`/vehicle MH47BG7036`\n"
         f"`/num 9093614290`\n"
         f"`/aadhar 886553666165`\n"
         f"`/family [12_DIGIT]`\n"
@@ -730,7 +773,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"`/upi name@okhdfcbank`\n"
         f"`/usage`\n\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"⚠️ *Daily limit:* {DAILY_LIMIT} searches per user\n"
+        f"⚠️ *Daily limit:* {DAILY_LIMIT} free searches\n"
         f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
     )
     await safe_reply(update, context, welcome_text, parse_mode='Markdown', reply_markup=reply_markup)
@@ -753,13 +796,13 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 pass
             keyboard = [
-                [InlineKeyboardButton("🚗 VEHICLE SEARCH", callback_data="menu_vehicle")],
                 [InlineKeyboardButton("📱 MOBILE SEARCH", callback_data="menu_num")],
                 [InlineKeyboardButton("🪪 AADHAAR SEARCH", callback_data="menu_aadhar")],
                 [InlineKeyboardButton("👨‍👩‍👧‍👦 AADHAAR TO FAMILY", callback_data="menu_family")],
                 [InlineKeyboardButton("📇 PAN CARD SEARCH", callback_data="menu_pan")],
                 [InlineKeyboardButton("💳 UPI VALIDATION", callback_data="menu_upi")],
                 [InlineKeyboardButton("📊 MY USAGE", callback_data="menu_usage")],
+                [InlineKeyboardButton("💎 BUY PREMIUM", callback_data="menu_premium")],
                 [InlineKeyboardButton("❓ HELP / COMMANDS", callback_data="menu_help")]
             ]
             try:
@@ -843,7 +886,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = query.from_user.id
         remaining = get_remaining(user_id)
         if remaining == -1:
-            t = f"⭐ *Unlimited Access*\n\nYou have VIP/Admin access.\n\n👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
+            t = f"💎 *Unlimited Access*\n\nYou have VIP/Premium access.\n\n👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
         else:
             used = DAILY_LIMIT - remaining
             t = (
@@ -851,6 +894,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"├ Used: *{used}* / {DAILY_LIMIT}\n"
                 f"├ Remaining: *{remaining}*\n"
                 f"└ Resets: *Midnight IST*\n\n"
+                f"💎 *Want more?* ₹{PREMIUM_PRICE} = {PREMIUM_SEARCHES} searches\n"
+                f"📞 Contact: {DEVELOPER_USERNAME}\n\n"
                 f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
             )
         try:
@@ -858,18 +903,43 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 BACK", callback_data="menu_back")]]))
         except Exception:
             pass
+    elif data == "menu_premium":
+        premium_text = (
+            f"💎 *PREMIUM PLANS* 💎\n\n━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"📦 *Package:*\n"
+            f"├ Price: *₹{PREMIUM_PRICE}*\n"
+            f"└ Searches: *{PREMIUM_SEARCHES}*\n\n"
+            f"🔓 *Benefits:*\n"
+            f"├ Unlimited daily usage\n"
+            f"├ No {DAILY_LIMIT}-search limit\n"
+            f"├ Priority support\n"
+            f"└ All search commands unlocked\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"📞 *Contact Admin:*\n"
+            f"👤 {DEVELOPER_USERNAME}\n\n"
+            f"💬 DM karo aur payment ke baad VIP access milega.\n\n"
+            f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
+        )
+        keyboard = [[InlineKeyboardButton("📩 CONTACT ADMIN", url=f"https://t.me/{DEVELOPER_USERNAME.lstrip('@')}")],
+                    [InlineKeyboardButton("🔙 BACK", callback_data="menu_back")]]
+        try:
+            await query.edit_message_text(premium_text, parse_mode='Markdown',
+                                         reply_markup=InlineKeyboardMarkup(keyboard))
+        except Exception:
+            pass
     elif data == "menu_help":
         help_text = (
             f"❓ *HELP & COMMANDS*\n\n━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"🚗 `/vehicle` - Redirects to @Osintrtobot\n"
-            f"📱 `/num` - Mobile details\n"
-            f"🪪 `/aadhar` - Aadhaar details\n"
-            f"👨‍👩‍👧‍👦 `/family` - Family details (JSON)\n"
-            f"📇 `/pan` - PAN details\n"
+            f"📱 `/num` - Mobile details (raw JSON)\n"
+            f"🪪 `/aadhar` - Aadhaar details (raw JSON)\n"
+            f"👨‍👩‍👧‍👦 `/family` - Family details (raw JSON)\n"
+            f"📇 `/pan` - PAN details (raw JSON)\n"
             f"💳 `/upi` - Validate UPI\n"
             f"📊 `/usage` - Check daily limit\n\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"⚠️ *Daily limit:* {DAILY_LIMIT} searches\n\n"
+            f"⚠️ *Daily limit:* {DAILY_LIMIT} searches\n"
+            f"💎 *Premium:* ₹{PREMIUM_PRICE} = {PREMIUM_SEARCHES} searches\n"
+            f"📞 Contact: {DEVELOPER_USERNAME}\n\n"
             f"👨‍💻 *Developer:* `{DEVELOPER_NAME}`"
         )
         keyboard = [[InlineKeyboardButton("🔙 BACK TO MENU", callback_data="menu_back")]]
@@ -880,13 +950,13 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
     elif data == "menu_back":
         keyboard = [
-            [InlineKeyboardButton("🚗 VEHICLE SEARCH", callback_data="menu_vehicle")],
             [InlineKeyboardButton("📱 MOBILE SEARCH", callback_data="menu_num")],
             [InlineKeyboardButton("🪪 AADHAAR SEARCH", callback_data="menu_aadhar")],
             [InlineKeyboardButton("👨‍👩‍👧‍👦 AADHAAR TO FAMILY", callback_data="menu_family")],
             [InlineKeyboardButton("📇 PAN CARD SEARCH", callback_data="menu_pan")],
             [InlineKeyboardButton("💳 UPI VALIDATION", callback_data="menu_upi")],
             [InlineKeyboardButton("📊 MY USAGE", callback_data="menu_usage")],
+            [InlineKeyboardButton("💎 BUY PREMIUM", callback_data="menu_premium")],
             [InlineKeyboardButton("❓ HELP / COMMANDS", callback_data="menu_help")]
         ]
         try:
@@ -898,7 +968,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
 
-# ═══════════════════════ ERROR HANDLER ═══════════════════════
+# ═══════════════════════════ ERROR HANDLER ═══════════════════════════
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     from telegram.error import RetryAfter, BadRequest, TimedOut
     err = context.error
@@ -934,6 +1004,7 @@ def main():
     print("🤖 Bot is starting...")
     print(f"👨‍💻 Developer: {DEVELOPER_NAME}")
     print(f"📊 Daily Limit: {DAILY_LIMIT} searches per user")
+    print(f"💎 Premium: ₹{PREMIUM_PRICE} = {PREMIUM_SEARCHES} searches")
     print(f"🔒 Force Subscribe Channels:")
     for ch in CHANNELS:
         print(f"   - {ch['name']}: {ch['link']}")
